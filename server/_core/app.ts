@@ -6,14 +6,7 @@ import path from "path";
 import fs from "fs";
 
 function serveStatic(app: Express) {
-  // In Vercel serverless, __dirname points to the function's directory
-  // The built frontend is at dist/public relative to project root
-  const distPath = path.resolve(
-    process.env.VERCEL
-      ? path.join(process.cwd(), "dist", "public")
-      : path.resolve(path.dirname(import.meta.url.replace("file://", "")), "../..", "dist", "public")
-  );
-
+  const distPath = path.resolve(process.cwd(), "dist", "public");
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
     app.use("*", (_req, res) => {
