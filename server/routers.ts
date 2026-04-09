@@ -36,20 +36,24 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
 
-    register: adminProcedure
+    register: publicProcedure
       .input(z.object({
         name: z.string().min(2, "Nome muito curto"),
         email: z.string().email("Email inválido"),
         password: z.string().min(6, "Senha mínimo 6 caracteres"),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const existing = await getUserByEmail(input.email);
         if (existing) throw new Error("Email já cadastrado");
 
         const hashed = await bcrypt.hash(input.password, 10);
         const user = await createUser({ name: input.name, email: input.email, password: hashed });
         if (!user) throw new Error("Erro ao criar usuário");
-        return { success: true, user: { id: user.id, name: user.name, email: user.email } };
+
+        const token = await sdk.createSessionToken(user.id, user.email!, user.name || "");
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true };
       }),
 
     login: publicProcedure
