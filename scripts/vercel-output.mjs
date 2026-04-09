@@ -14,7 +14,7 @@ if (existsSync("dist/public")) {
 copyFileSync("dist/api.js", ".vercel/output/functions/api.func/index.js");
 console.log("✓ Function copied");
 
-// Vercel output config — routes all traffic to the Express function
+// Vercel output config — API to function, SPA fallback to index.html
 writeFileSync(
   ".vercel/output/config.json",
   JSON.stringify({
@@ -26,10 +26,12 @@ writeFileSync(
         headers: { "cache-control": "public, max-age=31536000, immutable" },
         dest: "/assets/$1",
       },
+      // API and tRPC routes → Express function
+      { src: "/api/(.*)", dest: "/api" },
       // Serve existing static files directly
       { handle: "filesystem" },
-      // Everything else → Express function
-      { src: "/(.*)", dest: "/api" },
+      // SPA fallback — any unmatched route → index.html
+      { src: "/(.*)", dest: "/index.html" },
     ],
   })
 );
