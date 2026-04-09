@@ -59,7 +59,12 @@ export const appRouter = router({
         password: z.string().min(1),
       }))
       .mutation(async ({ ctx, input }) => {
-        const user = await getUserByEmail(input.email);
+        let user;
+        try {
+          user = await getUserByEmail(input.email);
+        } catch (err: any) {
+          throw new Error("DB error: " + (err?.cause?.message || err?.message || String(err)));
+        }
         if (!user) throw new Error("Email ou senha incorretos");
 
         const valid = await bcrypt.compare(input.password, user.password);
