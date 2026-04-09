@@ -1,7 +1,7 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
+import { publicProcedure, router, protectedProcedure, adminProcedure } from "./_core/trpc";
 import { sdk } from "./_core/sdk";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -26,6 +26,9 @@ import {
   createUser,
   getUserByEmail,
   updateUser,
+  getAllUsers,
+  deleteUser,
+  updateUserPassword,
 } from "./db";
 
 export const appRouter = router({
@@ -33,24 +36,20 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
 
-    register: publicProcedure
+    register: adminProcedure
       .input(z.object({
         name: z.string().min(2, "Nome muito curto"),
         email: z.string().email("Email inválido"),
         password: z.string().min(6, "Senha mínimo 6 caracteres"),
       }))
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ input }) => {
         const existing = await getUserByEmail(input.email);
         if (existing) throw new Error("Email já cadastrado");
 
         const hashed = await bcrypt.hash(input.password, 10);
         const user = await createUser({ name: input.name, email: input.email, password: hashed });
         if (!user) throw new Error("Erro ao criar usuário");
-
-        const token = await sdk.createSessionToken(user.id, user.email!, user.name || "");
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-        return { success: true };
+        return { success: true, user: { id: user.id, name: user.name, email: user.email } };
       }),
 
     login: publicProcedure
@@ -359,6 +358,43 @@ export const appRouter = router({
           }
         }
 
+        return { success: true };
+      }),
+  }),
+
+  admin: router({
+    listUsers: adminProcedure.query(async () => {
+      return getAllUsers();
+    }),
+
+    createUser: adminProcedure
+      .input(z.object({
+        name: z.string().min(2),
+        email: z.string().email(),
+        password: z.string().min(6),
+      }))
+      .mutation(async ({ input }) => {
+        const existing = await getUserByEmail(input.email);
+        if (existing) throw new Error("Email já cadastrado");
+        const hashed = await bcrypt.hash(input.password, 10);
+        const user = await createUser({ name: input.name, email: input.email, password: hashed });
+        if (!user) throw new Error("Erro ao criar usuário");
+        return { success: true, user: { id: user.id, name: user.name, email: user.email } };
+      }),
+
+    deleteUser: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (input.userId === ctx.user.id) throw new Error("Você não pode excluir sua própria conta");
+        await deleteUser(input.userId);
+        return { success: true };
+      }),
+
+    resetPassword: adminProcedure
+      .input(z.object({ userId: z.number(), password: z.string().min(6) }))
+      .mutation(async ({ input }) => {
+        const hashed = await bcrypt.hash(input.password, 10);
+        await updateUserPassword(input.userId, hashed);
         return { success: true };
       }),
   }),

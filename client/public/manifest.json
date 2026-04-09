@@ -1,0 +1,18 @@
+{
+  "name": "Conferencia Easy",
+  "short_name": "Conferencia",
+  "description": "Gestão de contratos e juros",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#142954",
+  "theme_color": "#1e3a6e",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

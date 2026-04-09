@@ -4,7 +4,7 @@ import { useLocation } from 'wouter';
 import {
   Menu, LogOut, LayoutDashboard, Users, FileText,
   CalendarClock, BarChart3, HelpCircle, UserCircle, Headphones,
-  ChevronRight, Zap,
+  ChevronRight, Zap, ShieldCheck,
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -19,6 +19,10 @@ const navigationItems = [
   { label: 'Relatórios',  href: '/reports',     icon: BarChart3 },
 ];
 
+const adminItems = [
+  { label: 'Usuários',    href: '/admin/users', icon: ShieldCheck },
+];
+
 const bottomItems = [
   { label: 'Perfil',    href: '/profile', icon: UserCircle },
   { label: 'Como usar', href: '/help',    icon: HelpCircle },
@@ -26,13 +30,13 @@ const bottomItems = [
 ];
 
 export default function DashboardLayoutCustom({ children }: DashboardLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
 
   const handleNavigation = (href: string) => {
     navigate(href);
-    if (window.innerWidth < 768) setSidebarOpen(false);
+    setSidebarOpen(false);
   };
 
   const NavItem = ({ item }: { item: typeof navigationItems[0] }) => {
@@ -57,10 +61,10 @@ export default function DashboardLayoutCustom({ children }: DashboardLayoutProps
   };
 
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden">
+    <div className="flex h-[100dvh] bg-slate-100 overflow-hidden">
       {/* Sidebar */}
       <aside
-        className={`fixed md:relative z-40 flex flex-col h-screen w-60 bg-gradient-to-b from-[#1e3a6e] to-[#142954] shadow-xl transition-transform duration-300 ${
+        className={`fixed md:relative z-40 flex flex-col h-[100dvh] w-60 flex-shrink-0 bg-gradient-to-b from-[#1e3a6e] to-[#142954] shadow-xl transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
@@ -83,6 +87,15 @@ export default function DashboardLayoutCustom({ children }: DashboardLayoutProps
           <ul className="space-y-0.5">
             {navigationItems.map(item => <NavItem key={item.href} item={item} />)}
           </ul>
+
+          {user?.role === "admin" && (
+            <>
+              <p className="text-blue-400 text-[10px] font-semibold uppercase tracking-widest mb-2 mt-6 px-3">Admin</p>
+              <ul className="space-y-0.5">
+                {adminItems.map(item => <NavItem key={item.href} item={item} />)}
+              </ul>
+            </>
+          )}
 
           <p className="text-blue-400 text-[10px] font-semibold uppercase tracking-widest mb-2 mt-6 px-3">Conta</p>
           <ul className="space-y-0.5">
@@ -114,7 +127,7 @@ export default function DashboardLayoutCustom({ children }: DashboardLayoutProps
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="bg-white border-b border-slate-200 px-6 h-14 flex items-center justify-between flex-shrink-0 shadow-sm">
+        <header className="bg-white border-b border-slate-200 px-4 md:px-6 h-14 flex items-center justify-between flex-shrink-0 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"
@@ -131,8 +144,8 @@ export default function DashboardLayoutCustom({ children }: DashboardLayoutProps
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto">
-          <div className="p-6 max-w-7xl mx-auto">
+        <main className="flex-1 overflow-auto overscroll-contain">
+          <div className="p-4 md:p-6 max-w-7xl mx-auto">
             {children}
           </div>
         </main>

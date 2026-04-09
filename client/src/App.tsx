@@ -12,15 +12,16 @@ import Reports from "./pages/Reports";
 import Profile from "./pages/Profile";
 import Help from "./pages/Help";
 import Support from "./pages/Support";
+import AdminUsers from "./pages/AdminUsers";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function ProtectedRoute({ component: Component, adminOnly = false }: { component: React.ComponentType; adminOnly?: boolean }) {
   const [, navigate] = useLocation();
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
 
   if (loading) {
     return (
@@ -32,6 +33,11 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
   if (!isAuthenticated) {
     navigate("/login");
+    return null;
+  }
+
+  if (adminOnly && user?.role !== "admin") {
+    navigate("/");
     return null;
   }
 
@@ -99,6 +105,13 @@ function Router() {
         {() => (
           <DashboardLayoutCustom>
             <ProtectedRoute component={Support} />
+          </DashboardLayoutCustom>
+        )}
+      </Route>
+      <Route path="/admin/users">
+        {() => (
+          <DashboardLayoutCustom>
+            <ProtectedRoute component={AdminUsers} adminOnly />
           </DashboardLayoutCustom>
         )}
       </Route>

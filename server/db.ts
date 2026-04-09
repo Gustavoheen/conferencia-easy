@@ -1,4 +1,4 @@
-import { eq, desc, like, and, gte, lte } from "drizzle-orm";
+import { eq, desc, like, and, gte, lte, count, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { users, customers, contracts, installments } from "../drizzle/schema";
@@ -240,6 +240,44 @@ export async function getLastInstallmentNumber(contractId: number): Promise<numb
     .orderBy(desc(installments.installmentNumber))
     .limit(1);
   return result[0]?.installmentNumber ?? 0;
+}
+
+export async function updateUserPassword(userId: number, hashedPassword: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
+}
+
+export async function deleteUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // cascade: delete installments → contracts → customers → user
+  const userContracts = await db.select({ id: contracts.id }).from(contracts).where(eq(contracts.userId, userId));
+  for (const c of userContracts) {
+    await db.delete(installments).where(eq(installments.contractId, c.id));
+  }
+  await db.delete(contracts).where(eq(contracts.userId, userId));
+  await db.delete(customers).where(eq(customers.userId, userId));
+  await db.delete(users).where(eq(users.id, userId));
+}
+
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      createdAt: users.createdAt,
+      lastSignedIn: users.lastSignedIn,
+      customerCount: sql<number>`(select count(*) from sysjuros.customers where "userId" = ${users.id})`,
+      contractCount: sql<number>`(select count(*) from sysjuros.contracts where "userId" = ${users.id})`,
+    })
+    .from(users)
+    .orderBy(desc(users.createdAt));
+  return rows;
 }
 
 // Dashboard queries
