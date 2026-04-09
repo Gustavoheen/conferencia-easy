@@ -1,20 +1,13 @@
 {
   "version": 2,
+  "framework": null,
   "buildCommand": "pnpm build",
-  "installCommand": "pnpm install --frozen-lockfile",
-  "builds": [
-    {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
-    }
-  ],
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "outputDirectory": "dist",
   "routes": [
     {
       "src": "/(.*)",
       "dest": "/api/index.ts"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
