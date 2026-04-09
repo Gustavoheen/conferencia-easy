@@ -3,10 +3,19 @@
   "framework": null,
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install --no-frozen-lockfile",
-"routes": [
+  "builds": [
+    {
+      "src": "dist/api.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
     {
       "src": "/(.*)",
-      "dest": "/api/index.ts"
+      "dest": "/dist/api.js"
     }
-  ]
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }
