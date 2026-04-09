@@ -237,7 +237,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Email <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
+            <label className="form-label">Email</label>
             <Input
               name="email"
               type="email"
@@ -248,7 +248,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Telefone <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
+            <label className="form-label">Telefone</label>
             <Input
               name="phone"
               placeholder="(00) 9 0000-0000"
@@ -258,7 +258,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">CPF/CNPJ <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
+            <label className="form-label">CPF/CNPJ</label>
             <Input
               name="cpfCnpj"
               placeholder="000.000.000-00"
@@ -268,7 +268,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Endereço <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
+            <label className="form-label">Endereço</label>
             <Input
               name="address"
               placeholder="Rua, avenida..."
@@ -278,7 +278,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Número <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
+            <label className="form-label">Número</label>
             <Input
               name="addressNumber"
               placeholder="123"
@@ -298,7 +298,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Bairro *</label>
+            <label className="form-label">Bairro</label>
             <Input
               name="neighborhood"
               placeholder="Bairro"
@@ -308,7 +308,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Cidade *</label>
+            <label className="form-label">Cidade</label>
             <Input
               name="city"
               placeholder="Cidade"
@@ -319,7 +319,7 @@ export default function Customers() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="form-label">Estado *</label>
+              <label className="form-label">Estado</label>
               <Input
                 name="state"
                 placeholder="MG"
@@ -330,7 +330,7 @@ export default function Customers() {
             </div>
 
             <div>
-              <label className="form-label">CEP *</label>
+              <label className="form-label">CEP</label>
               <Input
                 name="zipCode"
                 placeholder="00000-000"
