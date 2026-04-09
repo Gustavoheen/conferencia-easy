@@ -219,7 +219,7 @@ export const appRouter = router({
 
         if (input.type === "installment") {
           const n = installmentCount;
-          const installmentValue = (originalValue / n) * (1 + interestRate / 100);
+          const installmentValue = (originalValue / n) + (originalValue * interestRate / 100);
           for (let i = 1; i <= n; i++) {
             const dueDate = new Date(startDate);
             dueDate.setMonth(dueDate.getMonth() + i);

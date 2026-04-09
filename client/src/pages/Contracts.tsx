@@ -24,6 +24,7 @@ export default function Contracts() {
     installments: "1",
     installmentCount: "1",
     description: "",
+    startDate: new Date().toISOString().split("T")[0],
   });
 
   const limit = 10;
@@ -45,9 +46,9 @@ export default function Contracts() {
 
   const calcInstallment = useMemo(() => {
     if (formData.contractType === "installment") {
-      const perInstallment = (original / n) * (1 + rate / 100);
+      const interestPerInstallment = original * rate / 100;
+      const perInstallment = (original / n) + interestPerInstallment;
       const total = perInstallment * n;
-      const interestPerInstallment = (original / n) * (rate / 100);
       return { perInstallment, total, interestPerInstallment };
     }
     return null;
@@ -118,6 +119,7 @@ export default function Contracts() {
       installments: "1",
       installmentCount: "1",
       description: "",
+      startDate: new Date().toISOString().split("T")[0],
     });
     setEditingContract(null);
   };
@@ -133,6 +135,9 @@ export default function Contracts() {
         installments: "1",
         installmentCount: "1",
         description: contract.notes || "",
+        startDate: contract.startDate
+          ? new Date(contract.startDate).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
       });
     } else {
       resetForm();
@@ -162,11 +167,17 @@ export default function Contracts() {
     let interestValue: string;
     let computedTotal: string;
 
+    const n = parseInt(formData.installmentCount) || 1;
+    const iv = (originalVal * interestRateVal) / 100;
+
     if (formData.contractType === "revolving") {
       interestValue = "0";
       computedTotal = originalVal.toFixed(2);
+    } else if (formData.contractType === "installment") {
+      // Juros sobre o total inteiro, multiplicado pelo número de parcelas
+      interestValue = iv.toFixed(2);
+      computedTotal = (originalVal + iv * n).toFixed(2);
     } else {
-      const iv = (originalVal * interestRateVal) / 100;
       interestValue = iv.toFixed(2);
       computedTotal = (originalVal + iv).toFixed(2);
     }
@@ -179,11 +190,11 @@ export default function Contracts() {
       interestRate: formData.interestRate,
       interestValue,
       totalValue: computedTotal,
-      startDate: new Date(),
+      startDate: formData.startDate ? new Date(formData.startDate + "T12:00:00") : new Date(),
       notes: formData.description,
       installmentCount:
         formData.contractType === "installment"
-          ? parseInt(formData.installmentCount)
+          ? n
           : 1,
     };
 
@@ -465,6 +476,16 @@ export default function Contracts() {
               Serão geradas 12 parcelas de juros automaticamente
             </div>
           )}
+
+          <div>
+            <label className="form-label">Data do Contrato *</label>
+            <Input
+              name="startDate"
+              type="date"
+              value={formData.startDate}
+              onChange={handleInputChange}
+            />
+          </div>
 
           <div>
             <label className="form-label">Descrição</label>
