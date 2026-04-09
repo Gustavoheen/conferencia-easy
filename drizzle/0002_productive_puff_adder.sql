@@ -1,0 +1,1 @@
+ALTER TABLE `contracts` MODIFY COLUMN `type` enum('fixed','installment','revolving') NOT NULL;
