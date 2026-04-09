@@ -106,8 +106,8 @@ export default function Customers() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.email || !formData.phone || !formData.cpfCnpj) {
-      toast.error("Preencha todos os campos obrigatórios");
+    if (!formData.name) {
+      toast.error("Nome é obrigatório");
       return;
     }
 
@@ -237,7 +237,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Email *</label>
+            <label className="form-label">Email <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
             <Input
               name="email"
               type="email"
@@ -248,7 +248,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Telefone *</label>
+            <label className="form-label">Telefone <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
             <Input
               name="phone"
               placeholder="(00) 9 0000-0000"
@@ -258,7 +258,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">CPF/CNPJ *</label>
+            <label className="form-label">CPF/CNPJ <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
             <Input
               name="cpfCnpj"
               placeholder="000.000.000-00"
@@ -268,7 +268,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Endereço *</label>
+            <label className="form-label">Endereço <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
             <Input
               name="address"
               placeholder="Rua, avenida..."
@@ -278,7 +278,7 @@ export default function Customers() {
           </div>
 
           <div>
-            <label className="form-label">Número *</label>
+            <label className="form-label">Número <span className="text-gray-400 font-normal text-xs">(opcional)</span></label>
             <Input
               name="addressNumber"
               placeholder="123"

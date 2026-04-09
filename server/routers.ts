@@ -119,17 +119,17 @@ export const appRouter = router({
       .input(
         z.object({
           name: z.string().min(1),
-          email: z.string().email(),
-          phone: z.string().min(1),
-          cpfCnpj: z.string().min(1),
+          email: z.string().email().optional().or(z.literal("")),
+          phone: z.string().optional(),
+          cpfCnpj: z.string().optional(),
           birthDate: z.string().optional(),
-          address: z.string().min(1),
-          addressNumber: z.string().min(1),
+          address: z.string().optional(),
+          addressNumber: z.string().optional(),
           complement: z.string().optional(),
-          neighborhood: z.string().min(1),
-          city: z.string().min(1),
-          state: z.string().min(2).max(2),
-          zipCode: z.string().min(1),
+          neighborhood: z.string().optional(),
+          city: z.string().optional(),
+          state: z.string().optional(),
+          zipCode: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
