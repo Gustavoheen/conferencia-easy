@@ -1,11 +1,13 @@
-import express, { type Express } from "express";
+import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import path from "path";
 import fs from "fs";
 
-function serveStatic(app: Express) {
+type App = ReturnType<typeof express>;
+
+function serveStatic(app: App) {
   const distPath = path.resolve(process.cwd(), "dist", "public");
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
