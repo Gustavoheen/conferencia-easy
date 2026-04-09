@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "./index.ts",
+    "../server/**/*",
+    "../drizzle/**/*",
+    "../shared/**/*"
+  ],
+  "exclude": [
+    "../server/_core/vite.ts",
+    "../server/_core/index.ts",
+    "../client/**/*",
+    "../node_modules/**/*",
+    "../vite.config.ts"
+  ]
+}
