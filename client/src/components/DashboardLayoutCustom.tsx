@@ -39,13 +39,25 @@ const mobileNavItems = [
   { label: 'Contratos',    href: '/contracts',   icon: FileText },
 ];
 
-// Bolt + Dollar SVG logo component
+// Bolt + Dollar SVG logo component (mask technique — $ as negative space cuts)
 function BoltDollarLogo({ size = 36 }: { size?: number }) {
+  const id = `bolt-mask-${size}`;
   return (
     <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-      <rect width="512" height="512" rx="80" fill="#1e3a6e"/>
-      <polygon points="305,45 158,278 248,278 207,467 354,234 264,234" fill="#3b82f6"/>
-      <text x="256" y="310" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="130" fontWeight="900" fontFamily="Arial Black, Arial, sans-serif">$</text>
+      <defs>
+        <linearGradient id={`bg-${size}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#1d4ed8"/>
+          <stop offset="100%" stopColor="#0a1628"/>
+        </linearGradient>
+        <mask id={id}>
+          <rect width="512" height="512" fill="black"/>
+          <path d="M296 46 L138 272 L242 272 L208 466 L374 240 L270 240 Z" fill="white"/>
+          <rect x="0" y="186" width="512" height="28" fill="black"/>
+          <rect x="0" y="322" width="512" height="28" fill="black"/>
+        </mask>
+      </defs>
+      <rect width="512" height="512" rx="88" fill={`url(#bg-${size})`}/>
+      <rect width="512" height="512" fill="white" mask={`url(#${id})`}/>
     </svg>
   );
 }
