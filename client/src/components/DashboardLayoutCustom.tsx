@@ -4,7 +4,7 @@ import { useLocation } from 'wouter';
 import {
   Menu, LogOut, LayoutDashboard, Users, FileText,
   CalendarClock, BarChart3, HelpCircle, UserCircle, Headphones,
-  ChevronRight, Zap, ShieldCheck,
+  ChevronRight, ShieldCheck, Calculator,
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -12,15 +12,16 @@ interface DashboardLayoutProps {
 }
 
 const navigationItems = [
-  { label: 'Dashboard',   href: '/',            icon: LayoutDashboard },
-  { label: 'Clientes',    href: '/customers',   icon: Users },
-  { label: 'Contratos',   href: '/contracts',   icon: FileText },
-  { label: 'Vencimentos', href: '/expirations', icon: CalendarClock },
-  { label: 'Relatórios',  href: '/reports',     icon: BarChart3 },
+  { label: 'Dashboard',    href: '/',            icon: LayoutDashboard },
+  { label: 'Clientes',     href: '/customers',   icon: Users },
+  { label: 'Contratos',    href: '/contracts',   icon: FileText },
+  { label: 'Vencimentos',  href: '/expirations', icon: CalendarClock },
+  { label: 'Relatórios',   href: '/reports',     icon: BarChart3 },
+  { label: 'Calculadora',  href: '/calculator',  icon: Calculator },
 ];
 
 const adminItems = [
-  { label: 'Usuários',    href: '/admin/users', icon: ShieldCheck },
+  { label: 'Usuários',     href: '/admin/users', icon: ShieldCheck },
 ];
 
 const bottomItems = [
@@ -28,6 +29,26 @@ const bottomItems = [
   { label: 'Como usar', href: '/help',    icon: HelpCircle },
   { label: 'Suporte',   href: '/support', icon: Headphones },
 ];
+
+// Mobile bottom nav items (most used)
+const mobileNavItems = [
+  { label: 'Início',       href: '/',            icon: LayoutDashboard },
+  { label: 'Clientes',     href: '/customers',   icon: Users },
+  { label: 'Vencimentos',  href: '/expirations', icon: CalendarClock },
+  { label: 'Calc',         href: '/calculator',  icon: Calculator },
+  { label: 'Contratos',    href: '/contracts',   icon: FileText },
+];
+
+// Bolt + Dollar SVG logo component
+function BoltDollarLogo({ size = 36 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <rect width="512" height="512" rx="80" fill="#1e3a6e"/>
+      <polygon points="305,45 158,278 248,278 207,467 354,234 264,234" fill="#3b82f6"/>
+      <text x="256" y="310" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="130" fontWeight="900" fontFamily="Arial Black, Arial, sans-serif">$</text>
+    </svg>
+  );
+}
 
 export default function DashboardLayoutCustom({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -71,12 +92,10 @@ export default function DashboardLayoutCustom({ children }: DashboardLayoutProps
         {/* Logo */}
         <div className="px-5 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-400 rounded-xl flex items-center justify-center shadow-md">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
+            <BoltDollarLogo size={36} />
             <div>
-              <p className="font-bold text-white text-sm leading-tight">Conferencia</p>
-              <p className="font-extrabold text-blue-300 text-base leading-tight tracking-wide">Easy</p>
+              <p className="font-bold text-white text-sm leading-tight">Conferência</p>
+              <p className="font-extrabold text-blue-300 text-base leading-tight tracking-wide">Valores Easy</p>
             </div>
           </div>
         </div>
@@ -128,15 +147,29 @@ export default function DashboardLayoutCustom({ children }: DashboardLayoutProps
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
         <header className="bg-white border-b border-slate-200 px-4 md:px-6 h-14 flex items-center justify-between flex-shrink-0 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 md:hidden"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2 md:hidden">
+              <BoltDollarLogo size={28} />
+              <span className="font-bold text-slate-700 text-sm">Conferência <span className="text-blue-600">Valores Easy</span></span>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-500">Olá,</span>
-            <span className="text-sm font-semibold text-slate-700">{user?.name || 'Usuário'}</span>
+            <span className="hidden md:block text-sm text-slate-500">Olá,</span>
+            <span className="hidden md:block text-sm font-semibold text-slate-700">{user?.name || 'Usuário'}</span>
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold ml-1">
               {(user?.name || 'U')[0].toUpperCase()}
             </div>
@@ -144,11 +177,33 @@ export default function DashboardLayoutCustom({ children }: DashboardLayoutProps
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto overscroll-contain">
+        <main className="flex-1 overflow-auto overscroll-contain pb-16 md:pb-0">
           <div className="p-4 md:p-6 max-w-7xl mx-auto">
             {children}
           </div>
         </main>
+
+        {/* Mobile bottom navigation */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 safe-area-inset-bottom">
+          <div className="flex" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            {mobileNavItems.map(item => {
+              const Icon = item.icon;
+              const isActive = location === item.href;
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => handleNavigation(item.href)}
+                  className={`flex-1 flex flex-col items-center gap-0.5 py-2 px-1 transition-colors ${
+                    isActive ? "text-blue-600" : "text-slate-400"
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
       </div>
 
       {/* Mobile overlay */}

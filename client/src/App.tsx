@@ -12,7 +12,10 @@ import Reports from "./pages/Reports";
 import Profile from "./pages/Profile";
 import Help from "./pages/Help";
 import Support from "./pages/Support";
+import Calculator from "./pages/Calculator";
 import AdminUsers from "./pages/AdminUsers";
+import CustomerDetail from "./pages/CustomerDetail";
+import ContractDetail from "./pages/ContractDetail";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -59,10 +62,24 @@ function Router() {
           </DashboardLayoutCustom>
         )}
       </Route>
+      <Route path="/customers/:id">
+        {() => (
+          <DashboardLayoutCustom>
+            <ProtectedRoute component={CustomerDetail} />
+          </DashboardLayoutCustom>
+        )}
+      </Route>
       <Route path="/customers">
         {() => (
           <DashboardLayoutCustom>
             <ProtectedRoute component={Customers} />
+          </DashboardLayoutCustom>
+        )}
+      </Route>
+      <Route path="/contracts/:id">
+        {() => (
+          <DashboardLayoutCustom>
+            <ProtectedRoute component={ContractDetail} />
           </DashboardLayoutCustom>
         )}
       </Route>
@@ -112,6 +129,13 @@ function Router() {
         {() => (
           <DashboardLayoutCustom>
             <ProtectedRoute component={AdminUsers} adminOnly />
+          </DashboardLayoutCustom>
+        )}
+      </Route>
+      <Route path="/calculator">
+        {() => (
+          <DashboardLayoutCustom>
+            <ProtectedRoute component={Calculator} />
           </DashboardLayoutCustom>
         )}
       </Route>

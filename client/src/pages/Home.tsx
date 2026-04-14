@@ -5,7 +5,8 @@ import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { Loader2, Users, FileText, AlertTriangle, CalendarCheck, TrendingUp, Wallet } from "lucide-react";
+import { Loader2, Users, FileText, AlertTriangle, CalendarCheck, TrendingUp, Wallet, Banknote, ArrowDownCircle, Clock3, Percent, PiggyBank, ShieldCheck } from "lucide-react";
+import { useLocation } from "wouter";
 
 function fmtBRL(val: number) {
   return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -13,7 +14,12 @@ function fmtBRL(val: number) {
 
 export default function Home() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
+  const { data: investment } = trpc.dashboard.investmentStats.useQuery();
+  const { data: masterStats } = trpc.dashboard.masterStats.useQuery(undefined, {
+    enabled: user?.role === "admin",
+  });
 
   if (isLoading || !stats) {
     return (
@@ -24,10 +30,10 @@ export default function Home() {
   }
 
   const summaryCards = [
-    { label: "Clientes", value: stats.customerCount, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-    { label: "Contratos ativos", value: stats.contractCount, icon: FileText, color: "text-indigo-600", bg: "bg-indigo-50" },
-    { label: "Vencendo hoje", value: stats.todayCount, icon: CalendarCheck, color: "text-amber-600", bg: "bg-amber-50" },
-    { label: "Em atraso", value: stats.overdueCount, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50" },
+    { label: "Clientes", value: stats.customerCount, icon: Users, color: "text-blue-600", bg: "bg-blue-50", href: "/customers" },
+    { label: "Contratos ativos", value: stats.contractCount, icon: FileText, color: "text-indigo-600", bg: "bg-indigo-50", href: "/contracts" },
+    { label: "Vencendo hoje", value: stats.todayCount, icon: CalendarCheck, color: "text-amber-600", bg: "bg-amber-50", href: "/expirations" },
+    { label: "Em atraso", value: stats.overdueCount, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", href: "/expirations" },
   ];
 
   return (
@@ -45,7 +51,11 @@ export default function Home() {
         {summaryCards.map(card => {
           const Icon = card.icon;
           return (
-            <Card key={card.label} className="border-0 shadow-sm">
+            <Card
+              key={card.label}
+              className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow active:scale-95"
+              onClick={() => navigate(card.href)}
+            >
               <CardContent className="pt-5 pb-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -64,7 +74,7 @@ export default function Home() {
 
       {/* Financial summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <Card className="border-0 shadow-sm">
+        <Card className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/contracts")}>
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
@@ -77,7 +87,7 @@ export default function Home() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm">
+        <Card className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/expirations")}>
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
@@ -91,6 +101,98 @@ export default function Home() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Investment tracking */}
+      {investment && (
+        <div className="mb-6">
+          <h2 className="text-base font-semibold text-gray-800 mb-3">Meu Investimento</h2>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { label: "Capital investido", value: fmtBRL(investment.totalInvested), icon: Banknote, color: "text-blue-600", bg: "bg-blue-50" },
+              { label: "Capital recuperado", value: fmtBRL(investment.capitalRecovered), icon: ArrowDownCircle, color: "text-emerald-600", bg: "bg-emerald-50" },
+              { label: "Falta recuperar", value: fmtBRL(investment.capitalRemaining), icon: Clock3, color: "text-amber-600", bg: "bg-amber-50" },
+              { label: "Juros recebidos", value: fmtBRL(investment.totalInterestReceived), icon: Percent, color: "text-green-600", bg: "bg-green-50" },
+              { label: "Total recebido", value: fmtBRL(investment.totalReceived), icon: PiggyBank, color: "text-indigo-600", bg: "bg-indigo-50" },
+            ].map(card => {
+              const Icon = card.icon;
+              return (
+                <Card key={card.label} className="border-0 shadow-sm">
+                  <CardContent className="pt-4 pb-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+                        <p className={`text-lg font-bold ${card.color}`}>{card.value}</p>
+                      </div>
+                      <div className={`w-8 h-8 rounded-lg ${card.bg} flex items-center justify-center`}>
+                        <Icon className={`w-4 h-4 ${card.color}`} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          {investment.totalInvested > 0 && (
+            <div className="mt-3">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Capital recuperado</span>
+                <span>{Math.round((investment.capitalRecovered / investment.totalInvested) * 100)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: `${Math.min(100, (investment.capitalRecovered / investment.totalInvested) * 100)}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Master admin stats */}
+      {user?.role === "admin" && masterStats && (
+        <div className="mb-6">
+          <h2 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-blue-600" />
+            Visão Master — Todos os Usuários
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <Card className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/admin/users")}>
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-gray-500 mb-1">Usuários ativos</p>
+                <p className="text-2xl font-bold text-blue-600">{masterStats.userCount}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-gray-500 mb-1">Contratos na plataforma</p>
+                <p className="text-2xl font-bold text-indigo-600">{masterStats.contractCount}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-gray-500 mb-1">Parcelas em atraso</p>
+                <p className="text-2xl font-bold text-red-600">{masterStats.overdueCount}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-gray-500 mb-1">Total em contratos</p>
+                <p className="text-lg font-bold text-gray-800">{fmtBRL(masterStats.totalContractsValue)}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-gray-500 mb-1">Total recebido</p>
+                <p className="text-lg font-bold text-emerald-600">{fmtBRL(masterStats.totalReceived)}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-gray-500 mb-1">A receber (pendente)</p>
+                <p className="text-lg font-bold text-amber-600">{fmtBRL(masterStats.totalPending)}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

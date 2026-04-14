@@ -1,4 +1,4 @@
-import { eq, desc, like, and, gte, lte, count, sql } from "drizzle-orm";
+import { eq, desc, like, and, gte, lte, lt, count, sql, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { users, customers, contracts, installments } from "../drizzle/schema";
@@ -180,11 +180,12 @@ export async function getInstallmentsByUserId(userId: number, limit: number = 50
   if (!db) return { data: [], total: 0 };
 
   // Auto-mark overdue
-  const now = new Date();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   await db
     .update(installments)
     .set({ status: "overdue" })
-    .where(and(eq(installments.status, "pending"), lte(installments.dueDate, now)));
+    .where(and(eq(installments.status, "pending"), lt(installments.dueDate, todayStart)));
 
   const data = await db
     .select({
@@ -198,6 +199,9 @@ export async function getInstallmentsByUserId(userId: number, limit: number = 50
       paidDate: installments.paidDate,
       contractNumber: contracts.contractNumber,
       contractType: contracts.type,
+      contractMinimumPayment: contracts.minimumPayment,
+      contractOriginalValue: contracts.originalValue,
+      contractInterestRate: contracts.interestRate,
       customerName: customers.name,
     })
     .from(installments)
@@ -240,6 +244,93 @@ export async function getLastInstallmentNumber(contractId: number): Promise<numb
     .orderBy(desc(installments.installmentNumber))
     .limit(1);
   return result[0]?.installmentNumber ?? 0;
+}
+
+export async function deletePendingInstallments(contractId: number) {
+  const db = await getDb();
+  if (!db) return;
+  return db.delete(installments).where(
+    and(eq(installments.contractId, contractId), ne(installments.status, "paid"))
+  );
+}
+
+export async function getPendingInstallmentsCount(contractId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db
+    .select({ id: installments.id })
+    .from(installments)
+    .where(and(eq(installments.contractId, contractId), ne(installments.status, "paid")));
+  return result.length;
+}
+
+export async function getContractsByCustomerIdWithSummary(customerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const contractRows = await db.select().from(contracts)
+    .where(eq(contracts.customerId, customerId))
+    .orderBy(desc(contracts.createdAt));
+  const result = [];
+  for (const c of contractRows) {
+    const rows = await db.select().from(installments)
+      .where(eq(installments.contractId, c.id));
+    const paid = rows.filter(i => i.status === "paid");
+    result.push({
+      ...c,
+      totalPaid: paid.reduce((s, i) => s + parseFloat(i.paidValue as string || "0"), 0),
+      totalCapitalPaid: paid.reduce((s, i) => s + parseFloat(i.capitalPaid as string || "0"), 0),
+      totalInterestPaid: paid.reduce((s, i) => s + parseFloat(i.interestPaid as string || "0"), 0),
+      pendingCount: rows.filter(i => i.status !== "paid").length,
+      pendingValue: rows.filter(i => i.status !== "paid").reduce((s, i) => s + parseFloat(i.value as string || "0"), 0),
+      installmentCount: rows.length,
+    });
+  }
+  return result;
+}
+
+export async function getContractWithInstallments(contractId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const contractRow = await db.select().from(contracts)
+    .where(eq(contracts.id, contractId)).limit(1);
+  if (!contractRow[0]) return null;
+  const customer = await db.select().from(customers)
+    .where(eq(customers.id, contractRow[0].customerId)).limit(1);
+  const installmentRows = await db.select().from(installments)
+    .where(eq(installments.contractId, contractId))
+    .orderBy(installments.installmentNumber);
+  return {
+    ...contractRow[0],
+    customerName: customer[0]?.name || "Desconhecido",
+    installments: installmentRows,
+  };
+}
+
+export async function getInvestmentStats(userId: number) {
+  const db = await getDb();
+  if (!db) return { totalInvested: 0, capitalRecovered: 0, capitalRemaining: 0, totalInterestReceived: 0, totalReceived: 0 };
+  const userContracts = await db.select().from(contracts)
+    .where(eq(contracts.userId, userId));
+  let totalInvested = 0;
+  let capitalRecovered = 0;
+  let totalInterestReceived = 0;
+  for (const c of userContracts) {
+    const paidRows = await db.select().from(installments)
+      .where(and(eq(installments.contractId, c.id), eq(installments.status, "paid")));
+    const cCapital = paidRows.reduce((s, i) => s + parseFloat(i.capitalPaid as string || "0"), 0);
+    const cInterest = paidRows.reduce((s, i) => s + parseFloat(i.interestPaid as string || "0"), 0);
+    // originalValue atual + capital já pago = valor original real do investimento
+    totalInvested += parseFloat(c.originalValue as string) + cCapital;
+    capitalRecovered += cCapital;
+    totalInterestReceived += cInterest;
+  }
+  return {
+    totalInvested,
+    capitalRecovered,
+    capitalRemaining: totalInvested - capitalRecovered,
+    totalInterestReceived,
+    totalReceived: capitalRecovered + totalInterestReceived,
+  };
 }
 
 export async function updateUserPassword(userId: number, hashedPassword: string) {
@@ -297,10 +388,10 @@ export async function getDashboardStats(userId: number) {
   const [todayRows, overdueRows, customerRows, contractRows, allInstallments] = await Promise.all([
     db.select({ id: installments.id }).from(installments)
       .innerJoin(contracts, eq(installments.contractId, contracts.id))
-      .where(and(eq(contracts.userId, userId), gte(installments.dueDate, today), lte(installments.dueDate, tomorrow), eq(installments.status, "pending"))),
+      .where(and(eq(contracts.userId, userId), gte(installments.dueDate, today), lt(installments.dueDate, tomorrow), ne(installments.status, "paid"))),
     db.select({ id: installments.id }).from(installments)
       .innerJoin(contracts, eq(installments.contractId, contracts.id))
-      .where(and(eq(contracts.userId, userId), lte(installments.dueDate, today), eq(installments.status, "pending"))),
+      .where(and(eq(contracts.userId, userId), eq(installments.status, "overdue"))),
     db.select({ id: customers.id }).from(customers).where(eq(customers.userId, userId)),
     db.select({ id: contracts.id, totalValue: contracts.totalValue }).from(contracts).where(eq(contracts.userId, userId)),
     db.select({ value: installments.value, paidValue: installments.paidValue, status: installments.status, dueDate: installments.dueDate })
@@ -341,5 +432,30 @@ export async function getDashboardStats(userId: number) {
     totalReceived,
     totalPending,
     monthlyChart: Array.from(monthlyMap.values()),
+  };
+}
+
+export async function getMasterStats() {
+  const db = await getDb();
+  if (!db) return { userCount: 0, contractCount: 0, totalContractsValue: 0, totalReceived: 0, totalPending: 0, overdueCount: 0 };
+
+  const [userRows, contractRows, installmentRows] = await Promise.all([
+    db.select({ id: users.id }).from(users).where(ne(users.role, "admin")),
+    db.select({ id: contracts.id, totalValue: contracts.totalValue }).from(contracts),
+    db.select({ value: installments.value, paidValue: installments.paidValue, status: installments.status }).from(installments),
+  ]);
+
+  const totalContractsValue = contractRows.reduce((s, c) => s + parseFloat(c.totalValue as string || "0"), 0);
+  const totalReceived = installmentRows.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.paidValue as string || "0"), 0);
+  const totalPending = installmentRows.filter(i => i.status !== "paid").reduce((s, i) => s + parseFloat(i.value as string || "0"), 0);
+  const overdueCount = installmentRows.filter(i => i.status === "overdue").length;
+
+  return {
+    userCount: userRows.length,
+    contractCount: contractRows.length,
+    totalContractsValue,
+    totalReceived,
+    totalPending,
+    overdueCount,
   };
 }

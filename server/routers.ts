@@ -29,6 +29,12 @@ import {
   getAllUsers,
   deleteUser,
   updateUserPassword,
+  deletePendingInstallments,
+  getPendingInstallmentsCount,
+  getContractsByCustomerIdWithSummary,
+  getContractWithInstallments,
+  getInvestmentStats,
+  getMasterStats,
 } from "./db";
 
 export const appRouter = router({
@@ -94,6 +100,12 @@ export const appRouter = router({
     stats: protectedProcedure.query(async ({ ctx }) => {
       return getDashboardStats(ctx.user.id);
     }),
+    investmentStats: protectedProcedure.query(async ({ ctx }) => {
+      return getInvestmentStats(ctx.user.id);
+    }),
+    masterStats: adminProcedure.query(async () => {
+      return getMasterStats();
+    }),
   }),
 
   customers: router({
@@ -113,6 +125,15 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         return getCustomerById(input.id);
+      }),
+
+    getDetailById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const customer = await getCustomerById(input.id);
+        if (!customer) throw new Error("Cliente não encontrado");
+        const contractsList = await getContractsByCustomerIdWithSummary(input.id);
+        return { customer, contracts: contractsList };
       }),
 
     create: protectedProcedure
@@ -189,12 +210,20 @@ export const appRouter = router({
         return getContractById(input.id);
       }),
 
+    getDetailById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const data = await getContractWithInstallments(input.id);
+        if (!data) throw new Error("Contrato não encontrado");
+        return data;
+      }),
+
     create: protectedProcedure
       .input(
         z.object({
           customerId: z.number(),
           contractNumber: z.string().min(1),
-          type: z.enum(["fixed", "installment", "revolving"]),
+          type: z.enum(["fixed", "installment", "revolving", "sac"]),
           originalValue: z.string(),
           interestRate: z.string(),
           interestValue: z.string(),
@@ -207,9 +236,11 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const { installmentCount, ...contractData } = input;
+        const minimumPayment = (parseFloat(input.originalValue) * parseFloat(input.interestRate) / 100).toFixed(2);
         const result = await createContract({
           userId: ctx.user.id,
           ...contractData,
+          minimumPayment,
         });
         const contractId = (result as any).id as number;
 
@@ -218,9 +249,27 @@ export const appRouter = router({
         const startDate = new Date(input.startDate);
 
         if (input.type === "installment") {
+          // Juros simples: mesmo juro em todas as parcelas sobre o valor original
           const n = installmentCount;
           const installmentValue = (originalValue / n) + (originalValue * interestRate / 100);
           for (let i = 1; i <= n; i++) {
+            const dueDate = new Date(startDate);
+            dueDate.setMonth(dueDate.getMonth() + i);
+            await createInstallment({
+              contractId,
+              installmentNumber: i,
+              dueDate,
+              value: installmentValue.toFixed(2),
+            });
+          }
+        } else if (input.type === "sac") {
+          // SAC: amortização fixa + juros sobre saldo devedor remanescente
+          const n = installmentCount;
+          const amortization = originalValue / n;
+          for (let i = 1; i <= n; i++) {
+            const remainingBalance = originalValue - amortization * (i - 1);
+            const interest = remainingBalance * interestRate / 100;
+            const installmentValue = amortization + interest;
             const dueDate = new Date(startDate);
             dueDate.setMonth(dueDate.getMonth() + i);
             await createInstallment({
@@ -284,6 +333,12 @@ export const appRouter = router({
           id: z.number(),
           status: z.enum(["open", "closed"]).optional(),
           notes: z.string().optional(),
+          type: z.enum(["fixed", "installment", "revolving", "sac"]).optional(),
+          originalValue: z.string().optional(),
+          interestRate: z.string().optional(),
+          interestValue: z.string().optional(),
+          totalValue: z.string().optional(),
+          startDate: z.date().optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -334,23 +389,131 @@ export const appRouter = router({
         z.object({
           id: z.number(),
           paidValue: z.string(),
+          capitalPaid: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
         const installment = await getInstallmentById(input.id);
 
+        const capitalPaidNum = parseFloat(input.capitalPaid || "0");
+        const paidValueNum = parseFloat(input.paidValue);
+        const interestPaidNum = paidValueNum - capitalPaidNum;
+
         await updateInstallment(input.id, {
           status: "paid",
           paidValue: input.paidValue,
+          capitalPaid: capitalPaidNum.toFixed(2),
+          interestPaid: interestPaidNum.toFixed(2),
           paidDate: new Date(),
         });
 
-        // Se for contrato rotativo e aberto, gera a próxima parcela automaticamente
-        if (installment) {
-          const contract = await getContractById(installment.contractId);
-          if (contract && contract.type === "revolving" && contract.status === "open") {
-            const lastNumber = await getLastInstallmentNumber(installment.contractId);
-            const monthlyInterest = parseFloat(contract.originalValue) * parseFloat(contract.interestRate) / 100;
+        if (!installment) return { success: true };
+
+        const contract = await getContractById(installment.contractId);
+        if (!contract || contract.status !== "open") return { success: true };
+
+        const interestRate = parseFloat(contract.interestRate);
+        let currentPrincipal = parseFloat(contract.originalValue);
+        const capitalPaid = parseFloat(input.capitalPaid || "0");
+
+        if (capitalPaid > 0) {
+          // ---- Capital pago: atualiza saldo ----
+          currentPrincipal = Math.max(0, currentPrincipal - capitalPaid);
+          const newMinimumPayment = (currentPrincipal * interestRate / 100).toFixed(2);
+
+          await updateContract(installment.contractId, {
+            originalValue: currentPrincipal.toFixed(2),
+            minimumPayment: newMinimumPayment,
+          });
+
+          if (currentPrincipal <= 0) {
+            await deletePendingInstallments(installment.contractId);
+            await updateContract(installment.contractId, { status: "closed" });
+            return { success: true };
+          }
+
+          const baseDate = new Date(installment.dueDate as Date);
+
+          if (contract.type === "sac") {
+            // SAC: NÃO redistribui parcelas existentes.
+            // Se pagou menos capital que o esperado, cria nova parcela no fim.
+            const installmentValue = parseFloat(installment.value as string);
+            const interestPortion = parseFloat(contract.originalValue) * interestRate / 100;
+            const expectedCapital = Math.max(0, installmentValue - interestPortion);
+            const deficit = Math.max(0, expectedCapital - capitalPaid);
+
+            if (deficit > 0) {
+              // Encontra último vencimento entre as parcelas pendentes
+              const allInst = await getInstallmentsByContractId(installment.contractId);
+              const pendingInst = allInst.filter(i => i.status !== "paid");
+              const lastNumber = await getLastInstallmentNumber(installment.contractId);
+
+              let lastDueDate = new Date(baseDate);
+              for (const p of pendingInst) {
+                const d = new Date(p.dueDate as Date);
+                if (d > lastDueDate) lastDueDate = d;
+              }
+
+              const newDueDate = new Date(lastDueDate);
+              newDueDate.setMonth(newDueDate.getMonth() + 1);
+
+              // Nova parcela: déficit + juros sobre o déficit
+              const deficitInterest = deficit * interestRate / 100;
+              await createInstallment({
+                contractId: installment.contractId,
+                installmentNumber: lastNumber + 1,
+                dueDate: newDueDate,
+                value: (deficit + deficitInterest).toFixed(2),
+              });
+            }
+          } else if (contract.type === "revolving") {
+            // Rotativo: gera só 1 parcela pro próximo mês com juros sobre novo saldo
+            const monthlyInterest = currentPrincipal * interestRate / 100;
+            const dueDate = new Date(baseDate);
+            dueDate.setMonth(dueDate.getMonth() + 1);
+            await createInstallment({
+              contractId: installment.contractId,
+              installmentNumber: installment.installmentNumber + 1,
+              dueDate,
+              value: monthlyInterest.toFixed(2),
+            });
+          } else {
+            // Installment / Fixo: redistribui entre as parcelas restantes
+            const pendingCount = await getPendingInstallmentsCount(installment.contractId);
+            if (pendingCount > 0) {
+              await deletePendingInstallments(installment.contractId);
+              if (contract.type === "installment") {
+                const installmentValue = (currentPrincipal / pendingCount) + (currentPrincipal * interestRate / 100);
+                for (let i = 1; i <= pendingCount; i++) {
+                  const dueDate = new Date(baseDate);
+                  dueDate.setMonth(dueDate.getMonth() + i);
+                  await createInstallment({
+                    contractId: installment.contractId,
+                    installmentNumber: installment.installmentNumber + i,
+                    dueDate,
+                    value: installmentValue.toFixed(2),
+                  });
+                }
+              } else {
+                const monthlyInterest = currentPrincipal * interestRate / 100;
+                for (let i = 1; i <= pendingCount; i++) {
+                  const dueDate = new Date(baseDate);
+                  dueDate.setMonth(dueDate.getMonth() + i);
+                  await createInstallment({
+                    contractId: installment.contractId,
+                    installmentNumber: installment.installmentNumber + i,
+                    dueDate,
+                    value: monthlyInterest.toFixed(2),
+                  });
+                }
+              }
+            }
+          }
+        } else if (contract.type === "revolving") {
+          // Rotativo sem capital: gera próxima parcela automaticamente
+          const lastNumber = await getLastInstallmentNumber(installment.contractId);
+          if (currentPrincipal > 0) {
+            const monthlyInterest = currentPrincipal * interestRate / 100;
             const dueDate = new Date(installment.dueDate as Date);
             dueDate.setMonth(dueDate.getMonth() + 1);
             await createInstallment({
