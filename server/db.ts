@@ -107,6 +107,12 @@ export async function updateCustomer(customerId: number, data: Partial<typeof cu
 export async function deleteCustomer(customerId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Cascade: parcelas → contratos → cliente
+  const customerContracts = await db.select({ id: contracts.id }).from(contracts).where(eq(contracts.customerId, customerId));
+  for (const c of customerContracts) {
+    await db.delete(installments).where(eq(installments.contractId, c.id));
+  }
+  await db.delete(contracts).where(eq(contracts.customerId, customerId));
   return db.delete(customers).where(eq(customers.id, customerId));
 }
 
@@ -158,6 +164,8 @@ export async function updateContract(contractId: number, data: Partial<typeof co
 export async function deleteContract(contractId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Cascade: parcelas → contrato
+  await db.delete(installments).where(eq(installments.contractId, contractId));
   return db.delete(contracts).where(eq(contracts.id, contractId));
 }
 
@@ -441,26 +449,35 @@ export async function getDashboardStats(userId: number) {
 
 export async function getMasterStats() {
   const db = await getDb();
-  if (!db) return { userCount: 0, contractCount: 0, totalContractsValue: 0, totalReceived: 0, outstandingBalance: 0, overdueCount: 0 };
+  if (!db) return { userCount: 0, contractCount: 0, totalInvested: 0, capitalRecovered: 0, interestReceived: 0, outstandingBalance: 0, overdueCount: 0 };
 
-  const [userRows, contractRows, installmentRows] = await Promise.all([
+  const [userRows, contractRows, paidInstallments, overdueRows] = await Promise.all([
     db.select({ id: users.id }).from(users).where(ne(users.role, "admin")),
-    db.select({ id: contracts.id, totalValue: contracts.totalValue, originalValue: contracts.originalValue, status: contracts.status }).from(contracts),
-    db.select({ paidValue: installments.paidValue, status: installments.status }).from(installments),
+    db.select({ id: contracts.id, originalValue: contracts.originalValue, status: contracts.status }).from(contracts),
+    // JOIN para não pegar parcelas de contratos deletados
+    db.select({ capitalPaid: installments.capitalPaid, interestPaid: installments.interestPaid })
+      .from(installments)
+      .innerJoin(contracts, eq(installments.contractId, contracts.id))
+      .where(eq(installments.status, "paid")),
+    db.select({ id: installments.id })
+      .from(installments)
+      .innerJoin(contracts, eq(installments.contractId, contracts.id))
+      .where(eq(installments.status, "overdue")),
   ]);
 
-  const totalContractsValue = contractRows.reduce((s, c) => s + parseFloat(c.totalValue as string || "0"), 0);
-  const totalReceived = installmentRows.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.paidValue as string || "0"), 0);
-  // Saldo devedor real = soma do originalValue dos contratos em aberto (não infla com juros futuros gerados)
+  // Mesma lógica do getInvestmentStats: totalInvested = originalValue atual + capital já pago
+  const capitalRecovered = paidInstallments.reduce((s, i) => s + parseFloat(i.capitalPaid as string || "0"), 0);
+  const interestReceived = paidInstallments.reduce((s, i) => s + parseFloat(i.interestPaid as string || "0"), 0);
   const outstandingBalance = contractRows.filter(c => c.status === "open").reduce((s, c) => s + parseFloat(c.originalValue as string || "0"), 0);
-  const overdueCount = installmentRows.filter(i => i.status === "overdue").length;
+  const totalInvested = outstandingBalance + capitalRecovered; // sempre bate: investido = saldo + recuperado
 
   return {
     userCount: userRows.length,
     contractCount: contractRows.length,
-    totalContractsValue,
-    totalReceived,
-    outstandingBalance,
-    overdueCount,
+    totalInvested,       // capital total emprestado (saldo + recuperado)
+    capitalRecovered,    // capital devolvido
+    interestReceived,    // juros recebidos
+    outstandingBalance,  // saldo devedor real
+    overdueCount: overdueRows.length,
   };
 }

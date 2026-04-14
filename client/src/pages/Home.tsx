@@ -172,22 +172,30 @@ export default function Home() {
                 <p className="text-2xl font-bold text-red-600">{masterStats.overdueCount}</p>
               </CardContent>
             </Card>
+            {/* Linha financeira: a conta sempre fecha — totalInvested = outstandingBalance + capitalRecovered */}
             <Card className="border-0 shadow-sm">
               <CardContent className="pt-4 pb-4">
-                <p className="text-xs text-gray-500 mb-1">Total emprestado</p>
-                <p className="text-lg font-bold text-gray-800">{fmtBRL(masterStats.totalContractsValue)}</p>
+                <p className="text-xs text-gray-500 mb-1">Capital total emprestado</p>
+                <p className="text-lg font-bold text-gray-800">{fmtBRL(masterStats.totalInvested)}</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
               <CardContent className="pt-4 pb-4">
-                <p className="text-xs text-gray-500 mb-1">Total recebido</p>
-                <p className="text-lg font-bold text-emerald-600">{fmtBRL(masterStats.totalReceived)}</p>
+                <p className="text-xs text-gray-500 mb-1">Capital recuperado</p>
+                <p className="text-lg font-bold text-emerald-600">{fmtBRL(masterStats.capitalRecovered)}</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
               <CardContent className="pt-4 pb-4">
-                <p className="text-xs text-gray-500 mb-1">Saldo devedor atual</p>
+                <p className="text-xs text-gray-500 mb-1">Saldo devedor</p>
                 <p className="text-lg font-bold text-amber-600">{fmtBRL(masterStats.outstandingBalance)}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">= Capital − Recuperado</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm md:col-span-3">
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-gray-500 mb-1">Juros recebidos (lucro)</p>
+                <p className="text-xl font-bold text-green-600">{fmtBRL(masterStats.interestReceived)}</p>
               </CardContent>
             </Card>
           </div>
