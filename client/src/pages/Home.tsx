@@ -174,7 +174,7 @@ export default function Home() {
             </Card>
             <Card className="border-0 shadow-sm">
               <CardContent className="pt-4 pb-4">
-                <p className="text-xs text-gray-500 mb-1">Total em contratos</p>
+                <p className="text-xs text-gray-500 mb-1">Total emprestado</p>
                 <p className="text-lg font-bold text-gray-800">{fmtBRL(masterStats.totalContractsValue)}</p>
               </CardContent>
             </Card>
@@ -186,8 +186,8 @@ export default function Home() {
             </Card>
             <Card className="border-0 shadow-sm">
               <CardContent className="pt-4 pb-4">
-                <p className="text-xs text-gray-500 mb-1">A receber (pendente)</p>
-                <p className="text-lg font-bold text-amber-600">{fmtBRL(masterStats.totalPending)}</p>
+                <p className="text-xs text-gray-500 mb-1">Saldo devedor atual</p>
+                <p className="text-lg font-bold text-amber-600">{fmtBRL(masterStats.outstandingBalance)}</p>
               </CardContent>
             </Card>
           </div>

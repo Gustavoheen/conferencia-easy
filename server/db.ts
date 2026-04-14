@@ -367,7 +367,7 @@ export async function getAllUsers() {
       contractCount: sql<number>`(select count(*) from sysjuros.contracts where "userId" = ${users.id})`,
       totalContractsValue: sql<number>`coalesce((select sum(cast("totalValue" as numeric)) from sysjuros.contracts where "userId" = ${users.id}), 0)`,
       totalReceived: sql<number>`coalesce((select sum(cast("paidValue" as numeric)) from sysjuros.installments i inner join sysjuros.contracts c on c.id = i."contractId" where c."userId" = ${users.id} and i.status = 'paid'), 0)`,
-      totalPending: sql<number>`coalesce((select sum(cast(i.value as numeric)) from sysjuros.installments i inner join sysjuros.contracts c on c.id = i."contractId" where c."userId" = ${users.id} and i.status != 'paid'), 0)`,
+      outstandingBalance: sql<number>`coalesce((select sum(cast("originalValue" as numeric)) from sysjuros.contracts where "userId" = ${users.id} and status = 'open'), 0)`,
       overdueCount: sql<number>`(select count(*) from sysjuros.installments i inner join sysjuros.contracts c on c.id = i."contractId" where c."userId" = ${users.id} and i.status = 'overdue')`,
     })
     .from(users)
@@ -441,17 +441,18 @@ export async function getDashboardStats(userId: number) {
 
 export async function getMasterStats() {
   const db = await getDb();
-  if (!db) return { userCount: 0, contractCount: 0, totalContractsValue: 0, totalReceived: 0, totalPending: 0, overdueCount: 0 };
+  if (!db) return { userCount: 0, contractCount: 0, totalContractsValue: 0, totalReceived: 0, outstandingBalance: 0, overdueCount: 0 };
 
   const [userRows, contractRows, installmentRows] = await Promise.all([
     db.select({ id: users.id }).from(users).where(ne(users.role, "admin")),
-    db.select({ id: contracts.id, totalValue: contracts.totalValue }).from(contracts),
-    db.select({ value: installments.value, paidValue: installments.paidValue, status: installments.status }).from(installments),
+    db.select({ id: contracts.id, totalValue: contracts.totalValue, originalValue: contracts.originalValue, status: contracts.status }).from(contracts),
+    db.select({ paidValue: installments.paidValue, status: installments.status }).from(installments),
   ]);
 
   const totalContractsValue = contractRows.reduce((s, c) => s + parseFloat(c.totalValue as string || "0"), 0);
   const totalReceived = installmentRows.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.paidValue as string || "0"), 0);
-  const totalPending = installmentRows.filter(i => i.status !== "paid").reduce((s, i) => s + parseFloat(i.value as string || "0"), 0);
+  // Saldo devedor real = soma do originalValue dos contratos em aberto (não infla com juros futuros gerados)
+  const outstandingBalance = contractRows.filter(c => c.status === "open").reduce((s, c) => s + parseFloat(c.originalValue as string || "0"), 0);
   const overdueCount = installmentRows.filter(i => i.status === "overdue").length;
 
   return {
@@ -459,7 +460,7 @@ export async function getMasterStats() {
     contractCount: contractRows.length,
     totalContractsValue,
     totalReceived,
-    totalPending,
+    outstandingBalance,
     overdueCount,
   };
 }
