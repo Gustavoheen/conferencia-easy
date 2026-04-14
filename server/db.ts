@@ -365,6 +365,10 @@ export async function getAllUsers() {
       lastSignedIn: users.lastSignedIn,
       customerCount: sql<number>`(select count(*) from sysjuros.customers where "userId" = ${users.id})`,
       contractCount: sql<number>`(select count(*) from sysjuros.contracts where "userId" = ${users.id})`,
+      totalContractsValue: sql<number>`coalesce((select sum(cast("totalValue" as numeric)) from sysjuros.contracts where "userId" = ${users.id}), 0)`,
+      totalReceived: sql<number>`coalesce((select sum(cast("paidValue" as numeric)) from sysjuros.installments i inner join sysjuros.contracts c on c.id = i."contractId" where c."userId" = ${users.id} and i.status = 'paid'), 0)`,
+      totalPending: sql<number>`coalesce((select sum(cast(i.value as numeric)) from sysjuros.installments i inner join sysjuros.contracts c on c.id = i."contractId" where c."userId" = ${users.id} and i.status != 'paid'), 0)`,
+      overdueCount: sql<number>`(select count(*) from sysjuros.installments i inner join sysjuros.contracts c on c.id = i."contractId" where c."userId" = ${users.id} and i.status = 'overdue')`,
     })
     .from(users)
     .orderBy(desc(users.createdAt));

@@ -83,6 +83,24 @@ export default function AdminUsers() {
                     {Number(u.customerCount)} clientes · {Number(u.contractCount)} contratos
                     {u.lastSignedIn && ` · Último acesso ${new Date(u.lastSignedIn).toLocaleDateString("pt-BR")}`}
                   </p>
+                  {u.role !== "admin" && (
+                    <div className="flex gap-3 mt-1.5 flex-wrap">
+                      <span className="text-xs font-medium text-slate-600">
+                        Contratos: <span className="text-gray-800">{Number(u.totalContractsValue).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                      </span>
+                      <span className="text-xs font-medium text-slate-600">
+                        Recebido: <span className="text-emerald-700">{Number(u.totalReceived).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                      </span>
+                      <span className="text-xs font-medium text-slate-600">
+                        Pendente: <span className="text-amber-700">{Number(u.totalPending).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                      </span>
+                      {Number(u.overdueCount) > 0 && (
+                        <span className="text-xs font-medium text-red-600">
+                          {Number(u.overdueCount)} em atraso
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Button
