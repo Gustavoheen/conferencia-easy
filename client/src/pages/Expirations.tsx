@@ -161,6 +161,7 @@ export default function Expirations() {
     overdue: monthInstallments.filter(i => i.status === "overdue").length,
     paid: monthInstallments.filter(i => i.status === "paid").length,
     toReceive: monthInstallments.filter(i => i.status !== "paid").reduce((s, i) => s + parseFloat(i.value || 0), 0),
+    received: monthInstallments.filter(i => i.status === "paid").reduce((s, i) => s + parseFloat(i.paidValue || 0), 0),
   }), [monthInstallments]);
 
   const getPaymentInfo = (item: any) => {
@@ -228,46 +229,61 @@ export default function Expirations() {
         </div>
       )}
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="pt-3 pb-3">
-            <p className="text-xs text-gray-500 mb-1">Parcelas</p>
-            <p className="text-2xl font-bold text-gray-800">{totals.count}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
+      {/* Summary cards — clicáveis para filtrar */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+        <Card
+          onClick={() => setStatusFilter(statusFilter === "pending" ? "" : "pending")}
+          className={`border-0 shadow-sm cursor-pointer transition-all active:scale-95 hover:shadow-md ${statusFilter === "pending" ? "ring-2 ring-amber-400" : ""}`}
+        >
           <CardContent className="pt-3 pb-3">
             <p className="text-xs text-gray-500 mb-1">Pendentes</p>
             <p className="text-2xl font-bold text-amber-600">{totals.pending}</p>
+            <p className="text-xs text-amber-500 mt-0.5">{fmtBRL(monthInstallments.filter(i => i.status === "pending").reduce((s, i) => s + parseFloat(i.value || 0), 0))}</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm">
+        <Card
+          onClick={() => setStatusFilter(statusFilter === "overdue" ? "" : "overdue")}
+          className={`border-0 shadow-sm cursor-pointer transition-all active:scale-95 hover:shadow-md ${statusFilter === "overdue" ? "ring-2 ring-red-400" : ""}`}
+        >
           <CardContent className="pt-3 pb-3">
             <p className="text-xs text-gray-500 mb-1">Atrasadas</p>
             <p className="text-2xl font-bold text-red-600">{totals.overdue}</p>
+            <p className="text-xs text-red-400 mt-0.5">{fmtBRL(monthInstallments.filter(i => i.status === "overdue").reduce((s, i) => s + parseFloat(i.value || 0), 0))}</p>
+          </CardContent>
+        </Card>
+        <Card
+          onClick={() => setStatusFilter(statusFilter === "paid" ? "" : "paid")}
+          className={`border-0 shadow-sm cursor-pointer transition-all active:scale-95 hover:shadow-md ${statusFilter === "paid" ? "ring-2 ring-emerald-400" : ""}`}
+        >
+          <CardContent className="pt-3 pb-3">
+            <p className="text-xs text-gray-500 mb-1">Recebido no mês</p>
+            <p className="text-xl font-bold text-emerald-600">{fmtBRL(totals.received)}</p>
+            <p className="text-xs text-emerald-500 mt-0.5">{totals.paid} pago{totals.paid !== 1 ? "s" : ""}</p>
+          </CardContent>
+        </Card>
+        <Card
+          onClick={() => setStatusFilter("")}
+          className={`border-0 shadow-sm cursor-pointer transition-all active:scale-95 hover:shadow-md col-span-2 md:col-span-2 ${statusFilter === "" ? "ring-2 ring-blue-400" : ""}`}
+        >
+          <CardContent className="pt-3 pb-3">
+            <p className="text-xs text-gray-500 mb-1">A receber no mês</p>
+            <p className="text-xl font-bold text-blue-600">{fmtBRL(totals.toReceive)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{totals.pending + totals.overdue} parcela{(totals.pending + totals.overdue) !== 1 ? "s" : ""} em aberto</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="pt-3 pb-3">
-            <p className="text-xs text-gray-500 mb-1">A receber</p>
-            <p className="text-lg font-bold text-blue-600">{fmtBRL(totals.toReceive)}</p>
+            <p className="text-xs text-gray-500 mb-1">Total no mês</p>
+            <p className="text-xl font-bold text-gray-800">{totals.count}</p>
+            <p className="text-xs text-gray-400 mt-0.5">parcelas</p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Status filter */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {(["", "pending", "overdue", "paid"] as const).map(s => (
-          <button key={s} onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              statusFilter === s ? "bg-blue-600 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-blue-300"
-            }`}
-          >
-            {s === "" ? "Todos" : s === "pending" ? "Pendentes" : s === "overdue" ? "Atrasados" : "Pagos"}
-          </button>
-        ))}
-      </div>
+      {statusFilter && (
+        <div className="mb-3 text-right">
+          <button onClick={() => setStatusFilter("")} className="text-xs text-blue-600 hover:underline">Limpar filtro</button>
+        </div>
+      )}
 
       {/* List */}
       {filtered.length === 0 ? (
