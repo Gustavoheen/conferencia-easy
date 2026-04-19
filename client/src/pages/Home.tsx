@@ -15,16 +15,30 @@ function fmtBRL(val: number) {
 export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
-  const { data: investment } = trpc.dashboard.investmentStats.useQuery();
+  const { data: stats, isLoading, error: statsError, refetch } = trpc.dashboard.stats.useQuery(undefined, {
+    retry: 1,
+  });
+  const { data: investment } = trpc.dashboard.investmentStats.useQuery(undefined, { retry: 1 });
   const { data: masterStats } = trpc.dashboard.masterStats.useQuery(undefined, {
     enabled: user?.role === "admin",
+    retry: 1,
   });
 
-  if (isLoading || !stats) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (statsError || !stats) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <p className="text-red-500 text-sm">{statsError?.message || "Erro ao carregar dashboard"}</p>
+        <button onClick={() => refetch()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+          Tentar novamente
+        </button>
       </div>
     );
   }
