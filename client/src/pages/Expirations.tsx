@@ -172,24 +172,47 @@ export default function Expirations() {
     onError: (err) => toast.error("Erro: " + err.message),
   });
 
-  const getMinimumPayment = (item: any): number => {
+  const revertMutation = trpc.installments.revertPayment.useMutation({
+    onSuccess: () => {
+      toast.success("Pagamento estornado!");
+      refetch();
+    },
+    onError: (err) => toast.error("Erro ao estornar: " + err.message),
+  });
+
+  const getPaymentInfo = (item: any) => {
     const principal = parseFloat(item.contractOriginalValue || "0");
     const rate = parseFloat(item.contractInterestRate || "0");
-    return principal * rate / 100;
+    const interest = principal * rate / 100;
+    const installmentValue = parseFloat(item.value || "0");
+    const capital = Math.max(0, installmentValue - interest);
+    return { interest, capital, installmentValue };
+  };
+
+  const isFixedInstallmentContract = (item: any) =>
+    item.contractType === "sac" || item.contractType === "installment";
+
+  const handlePayInstallment = (item: any) => {
+    const { installmentValue, capital } = getPaymentInfo(item);
+    markAsPaidMutation.mutate({
+      id: item.id,
+      paidValue: installmentValue.toFixed(2),
+      capitalPaid: capital.toFixed(2),
+    });
   };
 
   const handlePayMinimum = (item: any) => {
-    const minimum = getMinimumPayment(item);
-    markAsPaidMutation.mutate({ id: item.id, paidValue: minimum.toFixed(2) });
+    const { interest } = getPaymentInfo(item);
+    markAsPaidMutation.mutate({ id: item.id, paidValue: interest.toFixed(2) });
   };
 
   const handlePayWithCapital = () => {
     if (!payingItem) return;
-    const minimum = getMinimumPayment(payingItem);
+    const { interest } = getPaymentInfo(payingItem);
     const capital = parseFloat(capitalInput) || 0;
     if (capital <= 0) { toast.error("Informe um valor de capital maior que zero"); return; }
-    const total = (minimum + capital).toFixed(2);
-    markAsPaidMutation.mutate({ id: payingItem.id, paidValue: total, capitalPaid: capital.toFixed(2) });
+    const total = interest + capital;
+    markAsPaidMutation.mutate({ id: payingItem.id, paidValue: total.toFixed(2), capitalPaid: capital.toFixed(2) });
   };
 
   const installments: any[] = data?.data || [];
@@ -371,7 +394,7 @@ export default function Expirations() {
                         <div className="hidden md:flex w-24 justify-center">{getStatusBadge(item.status)}</div>
 
                         {/* Action */}
-                        <div className="w-20 md:w-24 flex justify-end flex-shrink-0">
+                        <div className="w-24 md:w-32 flex flex-col items-end gap-1 flex-shrink-0">
                           {item.status !== "paid" ? (
                             <Button
                               size="sm"
@@ -382,7 +405,20 @@ export default function Expirations() {
                               Receber
                             </Button>
                           ) : (
-                            <span className="text-xs text-gray-400">{item.paidDate ? fmtDate(item.paidDate) : "—"}</span>
+                            <>
+                              <span className="text-xs text-gray-400">{item.paidDate ? fmtDate(item.paidDate) : "—"}</span>
+                              <button
+                                onClick={() => {
+                                  if (confirm("Estornar este pagamento?")) {
+                                    revertMutation.mutate({ id: item.id });
+                                  }
+                                }}
+                                disabled={revertMutation.isPending}
+                                className="text-xs text-red-500 hover:text-red-700 hover:underline disabled:opacity-40"
+                              >
+                                Estornar
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -397,9 +433,10 @@ export default function Expirations() {
 
       {/* Modal de pagamento */}
       {payingItem && (() => {
-        const minimum = getMinimumPayment(payingItem);
-        const capital = parseFloat(capitalInput) || 0;
-        const total = minimum + capital;
+        const info = getPaymentInfo(payingItem);
+        const isFixed = isFixedInstallmentContract(payingItem);
+        const extraCapital = parseFloat(capitalInput) || 0;
+        const revolvingTotal = info.interest + extraCapital;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
@@ -408,68 +445,114 @@ export default function Expirations() {
                 {payingItem.customerName} · {payingItem.contractNumber} · Parcela #{payingItem.installmentNumber}
               </p>
 
-              <div className="flex justify-between text-sm mb-3 px-1">
+              <div className="flex justify-between text-sm mb-4 px-1">
                 <span className="text-gray-500">Saldo devedor atual:</span>
                 <span className="font-semibold text-gray-800">{fmtBRL(payingItem.contractOriginalValue)}</span>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-                <p className="text-xs font-medium text-amber-700 mb-0.5">Pagamento mínimo (só juros)</p>
-                <p className="text-xl font-bold text-amber-800">{fmtBRL(minimum)}</p>
-                <p className="text-xs text-amber-600 mt-0.5">Saldo devedor permanece inalterado</p>
-              </div>
+              {isFixed ? (
+                /* SAC / Parcelado — mostra parcela + opção de só juros */
+                <>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                    <p className="text-xs font-medium text-blue-700 mb-0.5">Valor da parcela</p>
+                    <p className="text-xl font-bold text-blue-800">{fmtBRL(info.installmentValue)}</p>
+                    <div className="flex gap-4 mt-1 text-xs text-blue-600">
+                      <span>Amortização: {fmtBRL(info.capital)}</span>
+                      <span>Juros: {fmtBRL(info.interest)}</span>
+                    </div>
+                  </div>
 
-              <div className="border border-gray-200 rounded-lg p-3 mb-4">
-                <p className="text-xs font-medium text-gray-700 mb-2">Capital adicional (opcional)</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">R$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0,00"
-                    value={capitalInput}
-                    onChange={e => setCapitalInput(e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                {capital > 0 && (
-                  <p className="text-xs text-gray-500 mt-1.5">
-                    Saldo devedor reduzido em {fmtBRL(capital)}
-                  </p>
-                )}
-              </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                    <p className="text-xs font-medium text-amber-700 mb-0.5">Só juros (sem abater capital)</p>
+                    <p className="text-lg font-bold text-amber-800">{fmtBRL(info.interest)}</p>
+                    <p className="text-xs text-amber-600 mt-0.5">Saldo devedor permanece inalterado</p>
+                  </div>
 
-              <div className="flex justify-between items-center mb-4 border-t pt-3">
-                <span className="text-sm font-medium text-gray-700">Total a receber:</span>
-                <span className="text-lg font-bold text-blue-700">{fmtBRL(total)}</span>
-              </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setPayingItem(null); setCapitalInput(""); }}
+                      className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => handlePayMinimum(payingItem)}
+                      disabled={markAsPaidMutation.isPending}
+                      className="flex-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50"
+                    >
+                      Só juros
+                    </button>
+                    <button
+                      onClick={() => handlePayInstallment(payingItem)}
+                      disabled={markAsPaidMutation.isPending}
+                      className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50"
+                    >
+                      Pagar parcela
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* Rotativo / Fixo — mínimo + capital extra */
+                <>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                    <p className="text-xs font-medium text-amber-700 mb-0.5">Pagamento mínimo (só juros)</p>
+                    <p className="text-xl font-bold text-amber-800">{fmtBRL(info.interest)}</p>
+                    <p className="text-xs text-amber-600 mt-0.5">Saldo devedor permanece inalterado</p>
+                  </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setPayingItem(null); setCapitalInput(""); }}
-                  className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                {capital <= 0 ? (
-                  <button
-                    onClick={() => handlePayMinimum(payingItem)}
-                    disabled={markAsPaidMutation.isPending}
-                    className="flex-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50"
-                  >
-                    Só mínimo
-                  </button>
-                ) : (
-                  <button
-                    onClick={handlePayWithCapital}
-                    disabled={markAsPaidMutation.isPending}
-                    className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50"
-                  >
-                    Confirmar {fmtBRL(total)}
-                  </button>
-                )}
-              </div>
+                  <div className="border border-gray-200 rounded-lg p-3 mb-4">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Capital adicional (opcional)</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">R$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0,00"
+                        value={capitalInput}
+                        onChange={e => setCapitalInput(e.target.value)}
+                        className="flex-1 border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    {extraCapital > 0 && (
+                      <p className="text-xs text-gray-500 mt-1.5">
+                        Saldo devedor reduzido em {fmtBRL(extraCapital)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center mb-4 border-t pt-3">
+                    <span className="text-sm font-medium text-gray-700">Total a receber:</span>
+                    <span className="text-lg font-bold text-blue-700">{fmtBRL(revolvingTotal)}</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setPayingItem(null); setCapitalInput(""); }}
+                      className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancelar
+                    </button>
+                    {extraCapital <= 0 ? (
+                      <button
+                        onClick={() => handlePayMinimum(payingItem)}
+                        disabled={markAsPaidMutation.isPending}
+                        className="flex-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50"
+                      >
+                        Só mínimo
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePayWithCapital}
+                        disabled={markAsPaidMutation.isPending}
+                        className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50"
+                      >
+                        Confirmar {fmtBRL(revolvingTotal)}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         );

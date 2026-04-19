@@ -1,4 +1,5 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, SESSION_DURATION_MS } from "@shared/const";
+import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure, adminProcedure } from "./_core/trpc";
@@ -35,18 +36,25 @@ import {
   getContractWithInstallments,
   getInvestmentStats,
   getMasterStats,
+  markOverdueInstallments,
+  processInstallmentPayment,
+  revertInstallmentPayment,
 } from "./db";
 
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(opts => {
+      if (!opts.ctx.user) return null;
+      const { password, ...safeUser } = opts.ctx.user;
+      return safeUser;
+    }),
 
     register: publicProcedure
       .input(z.object({
         name: z.string().min(2, "Nome muito curto"),
         email: z.string().email("Email inválido"),
-        password: z.string().min(6, "Senha mínimo 6 caracteres"),
+        password: z.string().min(8, "Senha mínimo 8 caracteres"),
       }))
       .mutation(async ({ ctx, input }) => {
         const existing = await getUserByEmail(input.email);
@@ -58,7 +66,7 @@ export const appRouter = router({
 
         const token = await sdk.createSessionToken(user.id, user.email!, user.name || "");
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_DURATION_MS });
         return { success: true };
       }),
 
@@ -76,7 +84,7 @@ export const appRouter = router({
 
         const token = await sdk.createSessionToken(user.id, user.email!, user.name || "");
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_DURATION_MS });
         return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
       }),
 
@@ -113,7 +121,7 @@ export const appRouter = router({
       .input(
         z.object({
           search: z.string().optional(),
-          limit: z.number().default(10),
+          limit: z.number().default(10).max(100),
           offset: z.number().default(0),
         })
       )
@@ -123,15 +131,19 @@ export const appRouter = router({
 
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return getCustomerById(input.id);
+      .query(async ({ ctx, input }) => {
+        const customer = await getCustomerById(input.id);
+        if (!customer) throw new TRPCError({ code: 'NOT_FOUND', message: 'Cliente não encontrado' });
+        if (customer.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
+        return customer;
       }),
 
     getDetailById: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const customer = await getCustomerById(input.id);
-        if (!customer) throw new Error("Cliente não encontrado");
+        if (!customer) throw new TRPCError({ code: 'NOT_FOUND', message: 'Cliente não encontrado' });
+        if (customer.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
         const contractsList = await getContractsByCustomerIdWithSummary(input.id);
         return { customer, contracts: contractsList };
       }),
@@ -178,14 +190,20 @@ export const appRouter = router({
           zipCode: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const customer = await getCustomerById(input.id);
+        if (!customer) throw new TRPCError({ code: 'NOT_FOUND', message: 'Cliente não encontrado' });
+        if (customer.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
         const { id, ...data } = input;
         return updateCustomer(id, data);
       }),
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const customer = await getCustomerById(input.id);
+        if (!customer) throw new TRPCError({ code: 'NOT_FOUND', message: 'Cliente não encontrado' });
+        if (customer.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
         return deleteCustomer(input.id);
       }),
   }),
@@ -196,7 +214,7 @@ export const appRouter = router({
         z.object({
           customerId: z.number().optional(),
           status: z.enum(["open", "closed"]).optional(),
-          limit: z.number().default(10),
+          limit: z.number().default(10).max(100),
           offset: z.number().default(0),
         })
       )
@@ -206,15 +224,21 @@ export const appRouter = router({
 
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return getContractById(input.id);
+      .query(async ({ ctx, input }) => {
+        const contract = await getContractById(input.id);
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
+        return contract;
       }),
 
     getDetailById: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        const contract = await getContractById(input.id);
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
         const data = await getContractWithInstallments(input.id);
-        if (!data) throw new Error("Contrato não encontrado");
+        if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
         return data;
       }),
 
@@ -303,9 +327,10 @@ export const appRouter = router({
           months: z.number().default(12),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const contract = await getContractById(input.contractId);
-        if (!contract) throw new Error("Contrato não encontrado");
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
 
         const lastNumber = await getLastInstallmentNumber(input.contractId);
         const originalValue = parseFloat(contract.originalValue);
@@ -341,14 +366,20 @@ export const appRouter = router({
           startDate: z.date().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const contract = await getContractById(input.id);
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
         const { id, ...data } = input;
         return updateContract(id, data);
       }),
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const contract = await getContractById(input.id);
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
         return deleteContract(input.id);
       }),
   }),
@@ -356,18 +387,22 @@ export const appRouter = router({
   installments: router({
     listByContract: protectedProcedure
       .input(z.object({ contractId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        const contract = await getContractById(input.contractId);
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
         return getInstallmentsByContractId(input.contractId);
       }),
 
     listByUser: protectedProcedure
       .input(
         z.object({
-          limit: z.number().default(10),
+          limit: z.number().default(10).max(100),
           offset: z.number().default(0),
         })
       )
       .query(async ({ ctx, input }) => {
+        await markOverdueInstallments();
         return getInstallmentsByUserId(ctx.user.id, input.limit, input.offset);
       }),
 
@@ -380,8 +415,27 @@ export const appRouter = router({
           value: z.string(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const contract = await getContractById(input.contractId);
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
         return createInstallment(input);
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        dueDate: z.date().optional(),
+        value: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const installment = await getInstallmentById(input.id);
+        if (!installment) throw new TRPCError({ code: 'NOT_FOUND', message: 'Parcela não encontrada' });
+        const contract = await getContractById(installment.contractId);
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
+        const { id, ...data } = input;
+        return updateInstallment(id, data);
       }),
 
     markAsPaid: protectedProcedure
@@ -392,140 +446,29 @@ export const appRouter = router({
           capitalPaid: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const installment = await getInstallmentById(input.id);
-
-        const capitalPaidNum = parseFloat(input.capitalPaid || "0");
-        const paidValueNum = parseFloat(input.paidValue);
-        const interestPaidNum = paidValueNum - capitalPaidNum;
-
-        await updateInstallment(input.id, {
-          status: "paid",
-          paidValue: input.paidValue,
-          capitalPaid: capitalPaidNum.toFixed(2),
-          interestPaid: interestPaidNum.toFixed(2),
-          paidDate: new Date(),
-        });
-
-        if (!installment) return { success: true };
-
+        if (!installment) throw new TRPCError({ code: 'NOT_FOUND', message: 'Parcela não encontrada' });
         const contract = await getContractById(installment.contractId);
-        if (!contract || contract.status !== "open") return { success: true };
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
 
-        const interestRate = parseFloat(contract.interestRate);
-        let currentPrincipal = parseFloat(contract.originalValue);
-        const capitalPaid = parseFloat(input.capitalPaid || "0");
+        return processInstallmentPayment(
+          input.id,
+          parseFloat(input.paidValue),
+          parseFloat(input.capitalPaid || "0"),
+        );
+      }),
 
-        if (capitalPaid > 0) {
-          // ---- Capital pago: atualiza saldo ----
-          currentPrincipal = Math.max(0, currentPrincipal - capitalPaid);
-          const newMinimumPayment = (currentPrincipal * interestRate / 100).toFixed(2);
-
-          await updateContract(installment.contractId, {
-            originalValue: currentPrincipal.toFixed(2),
-            minimumPayment: newMinimumPayment,
-          });
-
-          if (currentPrincipal <= 0) {
-            await deletePendingInstallments(installment.contractId);
-            await updateContract(installment.contractId, { status: "closed" });
-            return { success: true };
-          }
-
-          const baseDate = new Date(installment.dueDate as Date);
-
-          if (contract.type === "sac") {
-            // SAC: NÃO redistribui parcelas existentes.
-            // Se pagou menos capital que o esperado, cria nova parcela no fim.
-            const installmentValue = parseFloat(installment.value as string);
-            const interestPortion = parseFloat(contract.originalValue) * interestRate / 100;
-            const expectedCapital = Math.max(0, installmentValue - interestPortion);
-            const deficit = Math.max(0, expectedCapital - capitalPaid);
-
-            if (deficit > 0) {
-              // Encontra último vencimento entre as parcelas pendentes
-              const allInst = await getInstallmentsByContractId(installment.contractId);
-              const pendingInst = allInst.filter(i => i.status !== "paid");
-              const lastNumber = await getLastInstallmentNumber(installment.contractId);
-
-              let lastDueDate = new Date(baseDate);
-              for (const p of pendingInst) {
-                const d = new Date(p.dueDate as Date);
-                if (d > lastDueDate) lastDueDate = d;
-              }
-
-              const newDueDate = new Date(lastDueDate);
-              newDueDate.setMonth(newDueDate.getMonth() + 1);
-
-              // Nova parcela: déficit + juros sobre o déficit
-              const deficitInterest = deficit * interestRate / 100;
-              await createInstallment({
-                contractId: installment.contractId,
-                installmentNumber: lastNumber + 1,
-                dueDate: newDueDate,
-                value: (deficit + deficitInterest).toFixed(2),
-              });
-            }
-          } else if (contract.type === "revolving") {
-            // Rotativo: gera só 1 parcela pro próximo mês com juros sobre novo saldo
-            const monthlyInterest = currentPrincipal * interestRate / 100;
-            const dueDate = new Date(baseDate);
-            dueDate.setMonth(dueDate.getMonth() + 1);
-            await createInstallment({
-              contractId: installment.contractId,
-              installmentNumber: installment.installmentNumber + 1,
-              dueDate,
-              value: monthlyInterest.toFixed(2),
-            });
-          } else {
-            // Installment / Fixo: redistribui entre as parcelas restantes
-            const pendingCount = await getPendingInstallmentsCount(installment.contractId);
-            if (pendingCount > 0) {
-              await deletePendingInstallments(installment.contractId);
-              if (contract.type === "installment") {
-                const installmentValue = (currentPrincipal / pendingCount) + (currentPrincipal * interestRate / 100);
-                for (let i = 1; i <= pendingCount; i++) {
-                  const dueDate = new Date(baseDate);
-                  dueDate.setMonth(dueDate.getMonth() + i);
-                  await createInstallment({
-                    contractId: installment.contractId,
-                    installmentNumber: installment.installmentNumber + i,
-                    dueDate,
-                    value: installmentValue.toFixed(2),
-                  });
-                }
-              } else {
-                const monthlyInterest = currentPrincipal * interestRate / 100;
-                for (let i = 1; i <= pendingCount; i++) {
-                  const dueDate = new Date(baseDate);
-                  dueDate.setMonth(dueDate.getMonth() + i);
-                  await createInstallment({
-                    contractId: installment.contractId,
-                    installmentNumber: installment.installmentNumber + i,
-                    dueDate,
-                    value: monthlyInterest.toFixed(2),
-                  });
-                }
-              }
-            }
-          }
-        } else if (contract.type === "revolving") {
-          // Rotativo sem capital: gera próxima parcela automaticamente
-          const lastNumber = await getLastInstallmentNumber(installment.contractId);
-          if (currentPrincipal > 0) {
-            const monthlyInterest = currentPrincipal * interestRate / 100;
-            const dueDate = new Date(installment.dueDate as Date);
-            dueDate.setMonth(dueDate.getMonth() + 1);
-            await createInstallment({
-              contractId: installment.contractId,
-              installmentNumber: lastNumber + 1,
-              dueDate,
-              value: monthlyInterest.toFixed(2),
-            });
-          }
-        }
-
-        return { success: true };
+    revertPayment: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const installment = await getInstallmentById(input.id);
+        if (!installment) throw new TRPCError({ code: 'NOT_FOUND', message: 'Parcela não encontrada' });
+        const contract = await getContractById(installment.contractId);
+        if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
+        if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
+        return revertInstallmentPayment(input.id);
       }),
   }),
 
@@ -538,7 +481,7 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().min(2),
         email: z.string().email(),
-        password: z.string().min(6),
+        password: z.string().min(8),
       }))
       .mutation(async ({ input }) => {
         const existing = await getUserByEmail(input.email);
@@ -558,7 +501,7 @@ export const appRouter = router({
       }),
 
     resetPassword: adminProcedure
-      .input(z.object({ userId: z.number(), password: z.string().min(6) }))
+      .input(z.object({ userId: z.number(), password: z.string().min(8) }))
       .mutation(async ({ input }) => {
         const hashed = await bcrypt.hash(input.password, 10);
         await updateUserPassword(input.userId, hashed);
