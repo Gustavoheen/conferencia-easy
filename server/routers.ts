@@ -434,8 +434,16 @@ export const appRouter = router({
         const contract = await getContractById(installment.contractId);
         if (!contract) throw new TRPCError({ code: 'NOT_FOUND', message: 'Contrato não encontrado' });
         if (contract.userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
-        const { id, ...data } = input;
-        return updateInstallment(id, data);
+        const { id, dueDate, value } = input;
+        const updateData: Record<string, unknown> = {};
+        if (value !== undefined) updateData.value = value;
+        if (dueDate !== undefined) {
+          updateData.dueDate = dueDate;
+          if (installment.status !== "paid") {
+            updateData.status = dueDate > new Date() ? "pending" : "overdue";
+          }
+        }
+        return updateInstallment(id, updateData);
       }),
 
     markAsPaid: protectedProcedure

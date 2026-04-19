@@ -152,6 +152,7 @@ function SmartCalendar({
 export default function Expirations() {
   const [, navigate] = useLocation();
   const [statusFilter, setStatusFilter] = useState<"" | "pending" | "paid" | "overdue">("");
+  const [customerFilter, setCustomerFilter] = useState<string>("");
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
   const [payingItem, setPayingItem] = useState<any | null>(null);
   const [capitalInput, setCapitalInput] = useState("");
@@ -217,16 +218,25 @@ export default function Expirations() {
 
   const installments: any[] = data?.data || [];
 
+  const uniqueCustomers = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { name: string }[] = [];
+    installments.forEach(i => {
+      const name = i.customerName || "—";
+      if (!seen.has(name)) { seen.add(name); result.push({ name }); }
+    });
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }, [installments]);
+
   const filtered = useMemo(() => {
-    let list = statusFilter ? installments.filter(i => i.status === statusFilter) : installments;
+    let list = installments;
+    if (customerFilter) list = list.filter(i => (i.customerName || "—") === customerFilter);
+    if (statusFilter) list = list.filter(i => i.status === statusFilter);
     if (selectedDay) {
-      list = list.filter(i => {
-        const d = new Date(i.dueDate);
-        return toLocalDateStr(d) === selectedDay;
-      });
+      list = list.filter(i => toLocalDateStr(new Date(i.dueDate)) === selectedDay);
     }
     return list;
-  }, [installments, statusFilter, selectedDay]);
+  }, [installments, customerFilter, statusFilter, selectedDay]);
 
   // Group by month/year
   const grouped = useMemo(() => {
@@ -312,7 +322,39 @@ export default function Expirations() {
         </Card>
       </div>
 
-      {/* Filter */}
+      {/* Customer filter */}
+      {uniqueCustomers.length > 1 && (
+        <div className="mb-3">
+          <p className="text-xs text-gray-500 mb-2 font-medium">Filtrar por cliente:</p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setCustomerFilter("")}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                customerFilter === ""
+                  ? "bg-gray-800 text-white"
+                  : "bg-white text-gray-600 border border-gray-200 hover:border-gray-400"
+              }`}
+            >
+              Todos os clientes
+            </button>
+            {uniqueCustomers.map(c => (
+              <button
+                key={c.name}
+                onClick={() => setCustomerFilter(customerFilter === c.name ? "" : c.name)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  customerFilter === c.name
+                    ? "bg-gray-800 text-white"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-400"
+                }`}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Status filter */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {(["", "pending", "overdue", "paid"] as const).map(s => (
           <button
