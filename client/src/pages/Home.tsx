@@ -119,15 +119,15 @@ export default function Home() {
           <h2 className="text-base font-semibold text-gray-800 mb-3">Meu Investimento</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
-              { label: "Capital investido", value: fmtBRL(investment.totalInvested), icon: Banknote, color: "text-blue-600", bg: "bg-blue-50" },
-              { label: "Capital recuperado", value: fmtBRL(investment.capitalRecovered), icon: ArrowDownCircle, color: "text-emerald-600", bg: "bg-emerald-50" },
-              { label: "Falta recuperar", value: fmtBRL(investment.capitalRemaining), icon: Clock3, color: "text-amber-600", bg: "bg-amber-50" },
-              { label: "Juros recebidos", value: fmtBRL(investment.totalInterestReceived), icon: Percent, color: "text-green-600", bg: "bg-green-50" },
-              { label: "Total recebido", value: fmtBRL(investment.totalReceived), icon: PiggyBank, color: "text-indigo-600", bg: "bg-indigo-50" },
+              { label: "Capital investido", value: fmtBRL(investment.totalInvested), icon: Banknote, color: "text-blue-600", bg: "bg-blue-50", href: "/contracts" },
+              { label: "Capital recuperado", value: fmtBRL(investment.capitalRecovered), icon: ArrowDownCircle, color: "text-emerald-600", bg: "bg-emerald-50", href: "/expirations" },
+              { label: "Falta recuperar", value: fmtBRL(investment.capitalRemaining), icon: Clock3, color: "text-amber-600", bg: "bg-amber-50", href: "/contracts" },
+              { label: "Juros recebidos", value: fmtBRL(investment.totalInterestReceived), icon: Percent, color: "text-green-600", bg: "bg-green-50", href: "/reports" },
+              { label: "Total recebido", value: fmtBRL(investment.totalReceived), icon: PiggyBank, color: "text-indigo-600", bg: "bg-indigo-50", href: "/reports" },
             ].map(card => {
               const Icon = card.icon;
               return (
-                <Card key={card.label} className="border-0 shadow-sm">
+                <Card key={card.label} className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow active:scale-95" onClick={() => navigate(card.href)}>
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-center justify-between">
                       <div>
