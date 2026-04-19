@@ -24,6 +24,7 @@ export default function ContractDetail() {
   const id = parseInt(params?.id || "0");
 
   const [editingInstId, setEditingInstId] = useState<number | null>(null);
+  const [editingValueId, setEditingValueId] = useState<number | null>(null);
   const [isEditingContract, setIsEditingContract] = useState(false);
   const [contractForm, setContractForm] = useState({
     originalValue: "",
@@ -227,7 +228,38 @@ export default function ContractDetail() {
                         )}
                       </td>
 
-                      <td className="py-2 px-2 text-right font-medium">{fmtBRL(parseFloat(i.value || "0"))}</td>
+                      {/* Valor — editável por clique */}
+                      <td className="py-2 px-2 text-right font-medium">
+                        {editingValueId === i.id ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="border border-blue-400 rounded px-1 py-0.5 text-sm w-28 text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            defaultValue={parseFloat(i.value || "0").toFixed(2)}
+                            autoFocus
+                            onBlur={(e) => {
+                              const v = parseFloat(e.target.value);
+                              if (!isNaN(v) && v > 0) {
+                                updateInstMutation.mutate({ id: i.id, value: v.toFixed(2) });
+                              }
+                              setEditingValueId(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") setEditingValueId(null);
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                            }}
+                          />
+                        ) : (
+                          <span
+                            className="cursor-pointer hover:text-blue-600 hover:underline"
+                            title="Clique para editar"
+                            onClick={() => setEditingValueId(i.id)}
+                          >
+                            {fmtBRL(parseFloat(i.value || "0"))}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-right font-medium">{i.status === "paid" ? fmtBRL(parseFloat(i.paidValue || "0")) : "—"}</td>
                       <td className="py-2 px-2 text-right text-emerald-600">{i.status === "paid" && parseFloat(i.capitalPaid || "0") > 0 ? fmtBRL(parseFloat(i.capitalPaid)) : "—"}</td>
                       <td className="py-2 px-2 text-right text-green-600">{i.status === "paid" && parseFloat(i.interestPaid || "0") > 0 ? fmtBRL(parseFloat(i.interestPaid)) : "—"}</td>
