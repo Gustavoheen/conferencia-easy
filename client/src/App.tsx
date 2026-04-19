@@ -26,7 +26,7 @@ import { useEffect, useState } from "react";
 function SplashScreen() {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-blue-600 animate-fade-out">
-      <img src="/icons/icon-192.png" alt="Logo" className="w-24 h-24 rounded-2xl shadow-2xl mb-4" />
+      <img src="/icons/icon.svg" alt="Logo" className="w-24 h-24 rounded-2xl shadow-2xl mb-4" />
       <span className="text-white text-2xl font-bold tracking-wide">Conferência Easy</span>
       <span className="text-blue-200 text-sm mt-1">Gestão de juros e contratos</span>
     </div>
