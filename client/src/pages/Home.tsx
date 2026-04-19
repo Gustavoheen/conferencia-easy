@@ -15,13 +15,10 @@ function fmtBRL(val: number) {
 export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const { data: stats, isLoading, error: statsError, refetch } = trpc.dashboard.stats.useQuery(undefined, {
-    retry: 1,
-  });
-  const { data: investment } = trpc.dashboard.investmentStats.useQuery(undefined, { retry: 1 });
+  const { data: stats, isLoading, error: statsError, refetch } = trpc.dashboard.stats.useQuery();
+  const { data: investment } = trpc.dashboard.investmentStats.useQuery();
   const { data: masterStats } = trpc.dashboard.masterStats.useQuery(undefined, {
     enabled: user?.role === "admin",
-    retry: 1,
   });
 
   if (isLoading) {
