@@ -121,7 +121,7 @@ export const appRouter = router({
       .input(
         z.object({
           search: z.string().optional(),
-          limit: z.number().default(10).max(100),
+          limit: z.number().max(100).default(10),
           offset: z.number().default(0),
         })
       )
@@ -214,7 +214,7 @@ export const appRouter = router({
         z.object({
           customerId: z.number().optional(),
           status: z.enum(["open", "closed"]).optional(),
-          limit: z.number().default(10).max(100),
+          limit: z.number().max(100).default(10),
           offset: z.number().default(0),
         })
       )
@@ -397,7 +397,7 @@ export const appRouter = router({
     listByUser: protectedProcedure
       .input(
         z.object({
-          limit: z.number().default(10).max(100),
+          limit: z.number().max(100).default(10),
           offset: z.number().default(0),
         })
       )
