@@ -294,66 +294,71 @@ export default function Expirations() {
         </Card>
       ) : (
         <Card className="border-0 shadow-sm overflow-hidden">
-          {filtered.map((item, idx) => (
-            <div
-              key={item.id}
-              className={`flex items-center gap-2 md:gap-4 px-3 md:px-5 py-3 border-b border-gray-100 last:border-0
-                ${item.status === "overdue" ? "bg-red-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
-            >
-              {/* Date */}
-              <div className="w-16 md:w-20 flex-shrink-0 text-xs md:text-sm text-gray-500 font-medium">
-                {fmtDate(item.dueDate)}
-              </div>
-
-              {/* Client + contract */}
-              <button
-                className="flex-1 min-w-0 text-left hover:opacity-75 transition-opacity"
-                onClick={() => navigate(`/contracts/${item.contractId}`)}
+          {filtered.map((item, idx) => {
+            const isPaid = item.status === "paid";
+            const displayValue = isPaid && parseFloat(item.paidValue || "0") > 0 ? item.paidValue : item.value;
+            const hasCapital = isPaid && parseFloat(item.capitalPaid || "0") > 0;
+            return (
+              <div
+                key={item.id}
+                className={`flex items-center gap-3 px-3 md:px-5 py-3 border-b border-gray-100 last:border-0
+                  ${item.status === "overdue" ? "bg-red-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
               >
-                <p className="font-medium text-gray-800 text-sm truncate">{item.customerName || "—"}</p>
-                <p className="text-xs text-gray-400">{item.contractNumber} · Parcela #{item.installmentNumber}</p>
-              </button>
-
-              {/* Value — para pagos mostra o total efetivamente recebido (juros + capital) */}
-              <div className="text-sm font-semibold text-gray-800 w-24 text-right flex-shrink-0">
-                {item.status === "paid" && parseFloat(item.paidValue || "0") > 0
-                  ? fmtBRL(item.paidValue)
-                  : fmtBRL(item.value)}
-                {item.status === "paid" && parseFloat(item.capitalPaid || "0") > 0 && (
-                  <p className="text-[10px] font-normal text-emerald-600 mt-0.5">
-                    +{fmtBRL(item.capitalPaid)} cap.
+                {/* Esquerda: cliente + meta */}
+                <button
+                  className="flex-1 min-w-0 text-left hover:opacity-75 transition-opacity"
+                  onClick={() => navigate(`/contracts/${item.contractId}`)}
+                >
+                  <p className="font-semibold text-gray-800 text-sm truncate">{item.customerName || "—"}</p>
+                  <p className="text-[11px] text-gray-400 truncate">
+                    {fmtDate(item.dueDate)} · {item.contractNumber} · P#{item.installmentNumber}
                   </p>
-                )}
-              </div>
+                </button>
 
-              {/* Status */}
-              <div className="hidden md:flex w-24 justify-center flex-shrink-0">{getStatusBadge(item.status)}</div>
+                {/* Centro: valor */}
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-bold text-gray-800 leading-tight whitespace-nowrap">{fmtBRL(displayValue)}</p>
+                  {hasCapital && (
+                    <p className="text-[10px] font-medium text-emerald-600 leading-tight whitespace-nowrap">
+                      +{fmtBRL(item.capitalPaid)} cap.
+                    </p>
+                  )}
+                  {!isPaid && (
+                    <div className="md:hidden mt-0.5">{getStatusBadge(item.status)}</div>
+                  )}
+                </div>
 
-              {/* Action */}
-              <div className="w-24 md:w-32 flex flex-col items-end gap-1 flex-shrink-0">
-                {item.status !== "paid" ? (
-                  <Button size="sm"
-                    onClick={() => { setPayingItem(item); setCapitalInput(""); }}
-                    disabled={markAsPaidMutation.isPending}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 px-2 md:px-3"
-                  >
-                    Receber
-                  </Button>
-                ) : (
-                  <>
-                    <span className="text-xs text-gray-400">{item.paidDate ? fmtDate(item.paidDate) : "—"}</span>
-                    <button
-                      onClick={() => { if (confirm("Estornar este pagamento?")) revertMutation.mutate({ id: item.id }); }}
-                      disabled={revertMutation.isPending}
-                      className="text-xs text-red-500 hover:text-red-700 hover:underline disabled:opacity-40"
+                {/* Status (desktop) */}
+                <div className="hidden md:flex w-24 justify-center flex-shrink-0">{getStatusBadge(item.status)}</div>
+
+                {/* Direita: ação */}
+                <div className="flex flex-col items-end gap-0.5 flex-shrink-0 w-20 md:w-28">
+                  {!isPaid ? (
+                    <Button size="sm"
+                      onClick={() => { setPayingItem(item); setCapitalInput(""); }}
+                      disabled={markAsPaidMutation.isPending}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 px-3 w-full"
                     >
-                      Estornar
-                    </button>
-                  </>
-                )}
+                      Receber
+                    </Button>
+                  ) : (
+                    <>
+                      <span className="text-[11px] text-emerald-600 font-medium leading-tight whitespace-nowrap">
+                        ✓ {item.paidDate ? fmtDate(item.paidDate) : "Pago"}
+                      </span>
+                      <button
+                        onClick={() => { if (confirm("Estornar este pagamento?")) revertMutation.mutate({ id: item.id }); }}
+                        disabled={revertMutation.isPending}
+                        className="text-[11px] text-red-500 hover:text-red-700 hover:underline disabled:opacity-40 leading-tight"
+                      >
+                        Estornar
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </Card>
       )}
 
