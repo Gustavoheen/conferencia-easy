@@ -12,7 +12,7 @@ export const sysjuros = pgSchema("sysjuros");
 
 // Enums
 export const roleEnum = sysjuros.enum("role", ["user", "admin"]);
-export const contractTypeEnum = sysjuros.enum("contract_type", ["fixed", "installment", "revolving"]);
+export const contractTypeEnum = sysjuros.enum("contract_type", ["fixed", "installment", "revolving", "sac"]);
 export const contractStatusEnum = sysjuros.enum("contract_status", ["open", "closed"]);
 export const installmentStatusEnum = sysjuros.enum("installment_status", ["pending", "paid", "overdue"]);
 
@@ -57,7 +57,7 @@ export const contracts = sysjuros.table("contracts", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull(),
   customerId: integer("customerId").notNull(),
-  contractNumber: varchar("contractNumber", { length: 50 }).notNull().unique(),
+  contractNumber: varchar("contractNumber", { length: 50 }).notNull(),
   type: contractTypeEnum("type").notNull(),
   status: contractStatusEnum("status").default("open").notNull(),
   originalValue: numeric("originalValue", { precision: 12, scale: 2 }).notNull(),
@@ -81,6 +81,8 @@ export const installments = sysjuros.table("installments", {
   dueDate: timestamp("dueDate").notNull(),
   value: numeric("value", { precision: 12, scale: 2 }).notNull(),
   paidValue: numeric("paidValue", { precision: 12, scale: 2 }).default("0"),
+  capitalPaid: numeric("capitalPaid", { precision: 12, scale: 2 }).default("0"),
+  interestPaid: numeric("interestPaid", { precision: 12, scale: 2 }).default("0"),
   status: installmentStatusEnum("status").default("pending").notNull(),
   paidDate: timestamp("paidDate"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

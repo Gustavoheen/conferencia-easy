@@ -39,6 +39,7 @@ import {
   markOverdueInstallments,
   processInstallmentPayment,
   revertInstallmentPayment,
+  getNextContractNumberForUser,
 } from "./db";
 
 export const appRouter = router({
@@ -259,11 +260,13 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const { installmentCount, ...contractData } = input;
+        const { installmentCount, contractNumber: _ignored, ...contractData } = input;
         const minimumPayment = (parseFloat(input.originalValue) * parseFloat(input.interestRate) / 100).toFixed(2);
+        const nextNumber = await getNextContractNumberForUser(ctx.user.id);
         const result = await createContract({
           userId: ctx.user.id,
           ...contractData,
+          contractNumber: nextNumber,
           minimumPayment,
         });
         const contractId = (result as any).id as number;

@@ -314,8 +314,17 @@ export default function Expirations() {
                 <p className="text-xs text-gray-400">{item.contractNumber} · Parcela #{item.installmentNumber}</p>
               </button>
 
-              {/* Value */}
-              <div className="text-sm font-semibold text-gray-800 w-24 text-right flex-shrink-0">{fmtBRL(item.value)}</div>
+              {/* Value — para pagos mostra o total efetivamente recebido (juros + capital) */}
+              <div className="text-sm font-semibold text-gray-800 w-24 text-right flex-shrink-0">
+                {item.status === "paid" && parseFloat(item.paidValue || "0") > 0
+                  ? fmtBRL(item.paidValue)
+                  : fmtBRL(item.value)}
+                {item.status === "paid" && parseFloat(item.capitalPaid || "0") > 0 && (
+                  <p className="text-[10px] font-normal text-emerald-600 mt-0.5">
+                    +{fmtBRL(item.capitalPaid)} cap.
+                  </p>
+                )}
+              </div>
 
               {/* Status */}
               <div className="hidden md:flex w-24 justify-center flex-shrink-0">{getStatusBadge(item.status)}</div>

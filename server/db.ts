@@ -154,6 +154,17 @@ export async function createContract(contract: typeof contracts.$inferInsert) {
   return result[0];
 }
 
+// Próximo número de contrato sequencial por usuário no formato "#N"
+export async function getNextContractNumberForUser(userId: number): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db
+    .select({ id: contracts.id })
+    .from(contracts)
+    .where(eq(contracts.userId, userId));
+  return `#${rows.length + 1}`;
+}
+
 export async function updateContract(contractId: number, data: Partial<typeof contracts.$inferInsert>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -205,6 +216,8 @@ export async function getInstallmentsByUserId(userId: number, limit: number = 50
       dueDate: installments.dueDate,
       value: installments.value,
       paidValue: installments.paidValue,
+      capitalPaid: installments.capitalPaid,
+      interestPaid: installments.interestPaid,
       status: installments.status,
       paidDate: installments.paidDate,
       contractNumber: contracts.contractNumber,

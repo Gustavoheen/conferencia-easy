@@ -157,8 +157,15 @@ export default function DashboardLayoutCustom({ children }: DashboardLayoutProps
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar */}
-        <header className="bg-white border-b border-slate-200 px-4 md:px-6 h-14 flex items-center justify-between flex-shrink-0 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        {/* Topbar — usa min-h em vez de h fixo pra acomodar safe-area do iOS sem cortar logo */}
+        <header
+          className="bg-white border-b border-slate-200 px-4 md:px-6 flex items-center justify-between flex-shrink-0 shadow-sm"
+          style={{
+            paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)',
+            paddingBottom: '0.5rem',
+            minHeight: 'calc(env(safe-area-inset-top) + 3.5rem)',
+          }}
+        >
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
