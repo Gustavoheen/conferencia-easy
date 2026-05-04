@@ -19,8 +19,8 @@ function serveStatic(app: App) {
 
 export function createApp() {
   const app = express();
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "2mb" }));
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
   serveStatic(app);
   return app;

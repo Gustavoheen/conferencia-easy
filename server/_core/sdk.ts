@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, SESSION_DURATION_MS } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
@@ -15,14 +15,16 @@ export type SessionPayload = {
 
 class SDKServer {
   private getSecret() {
-    return new TextEncoder().encode(ENV.cookieSecret || "fallback-dev-secret");
+    const cookieSecret = ENV.cookieSecret;
+    if (!cookieSecret) throw new Error('JWT_SECRET env var is required');
+    return new TextEncoder().encode(cookieSecret);
   }
 
   async createSessionToken(
     userId: number,
     email: string,
     name: string,
-    expiresInMs = ONE_YEAR_MS
+    expiresInMs = SESSION_DURATION_MS
   ): Promise<string> {
     const expiresAt = Math.floor((Date.now() + expiresInMs) / 1000);
     return new SignJWT({ userId, email, name })

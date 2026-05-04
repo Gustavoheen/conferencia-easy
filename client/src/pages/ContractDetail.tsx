@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useRoute } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, CheckCircle2, Clock, AlertTriangle, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, Clock, AlertTriangle, Pencil, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 
 function fmtBRL(val: number) {
@@ -26,6 +26,8 @@ export default function ContractDetail() {
   const [editingInstId, setEditingInstId] = useState<number | null>(null);
   const [editingValueId, setEditingValueId] = useState<number | null>(null);
   const [isEditingContract, setIsEditingContract] = useState(false);
+  const [payingInst, setPayingInst] = useState<any | null>(null);
+  const [payCapital, setPayCapital] = useState("");
   const [contractForm, setContractForm] = useState({
     originalValue: "",
     interestRate: "",
@@ -39,6 +41,11 @@ export default function ContractDetail() {
   const revertMutation = trpc.installments.revertPayment.useMutation({
     onSuccess: () => { toast.success("Pagamento estornado!"); refetch(); },
     onError: (err) => toast.error("Erro ao estornar: " + err.message),
+  });
+
+  const markAsPaidMutation = trpc.installments.markAsPaid.useMutation({
+    onSuccess: () => { toast.success("Parcela marcada como paga!"); setPayingInst(null); setPayCapital(""); refetch(); },
+    onError: (err) => toast.error("Erro: " + err.message),
   });
 
   const updateInstMutation = trpc.installments.update.useMutation({
@@ -95,6 +102,7 @@ export default function ContractDetail() {
       installment: { label: "Parcelado", cls: "bg-yellow-100 text-yellow-700" },
       sac: { label: "SAC", cls: "bg-purple-100 text-purple-700" },
       revolving: { label: "Rotativo", cls: "bg-blue-100 text-blue-700" },
+      fixed_interest: { label: "Juros Fixo", cls: "bg-orange-100 text-orange-700" },
     };
     const t = map[type] || { label: type, cls: "bg-gray-100 text-gray-700" };
     return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${t.cls}`}>{t.label}</span>;
@@ -270,7 +278,7 @@ export default function ContractDetail() {
                       </td>
                       <td className="py-2 px-2 text-gray-500">{i.paidDate ? fmtDate(i.paidDate) : "—"}</td>
                       <td className="py-2 px-2">
-                        {i.status === "paid" && (
+                        {i.status === "paid" ? (
                           <button
                             onClick={() => {
                               if (confirm("Estornar este pagamento?")) {
@@ -282,6 +290,14 @@ export default function ContractDetail() {
                           >
                             Estornar
                           </button>
+                        ) : (
+                          <button
+                            onClick={() => { setPayingInst({ ...i, contractType: data.type, contractInterestValue: data.interestValue }); setPayCapital(""); }}
+                            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 whitespace-nowrap"
+                          >
+                            <DollarSign className="w-3 h-3" />
+                            Receber
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -292,6 +308,129 @@ export default function ContractDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de pagamento */}
+      {payingInst && (() => {
+        const isFixedInterestType = payingInst.contractType === "fixed_interest";
+        const isRevolvingType = payingInst.contractType === "revolving";
+        const usesSeparatePayment = isFixedInterestType || isRevolvingType;
+        const fixedInterest = isFixedInterestType
+          ? parseFloat(payingInst.contractInterestValue || payingInst.value || "0")
+          : parseFloat(payingInst.value || "0");
+        const extraCapital = parseFloat(payCapital) || 0;
+        const totalToPay = fixedInterest + extraCapital;
+
+        const handleConfirmPayment = () => {
+          if (usesSeparatePayment) {
+            markAsPaidMutation.mutate({
+              id: payingInst.id,
+              paidValue: totalToPay.toFixed(2),
+              capitalPaid: extraCapital > 0 ? extraCapital.toFixed(2) : "0",
+            });
+          } else {
+            markAsPaidMutation.mutate({
+              id: payingInst.id,
+              paidValue: parseFloat(payingInst.value || "0").toFixed(2),
+              capitalPaid: "0",
+            });
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Registrar Recebimento</h2>
+              <p className="text-sm text-gray-500 mb-4">Parcela #{payingInst.installmentNumber}</p>
+
+              {usesSeparatePayment ? (
+                <>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                    <p className="text-xs font-medium text-amber-700 mb-0.5">
+                      {isFixedInterestType ? "Juros mensais fixos" : "Juros mensais"}
+                    </p>
+                    <p className="text-xl font-bold text-amber-800">
+                      {fixedInterest.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </p>
+                    {isFixedInterestType && (
+                      <p className="text-xs text-amber-600 mt-0.5">Valor fixo independente do capital pago</p>
+                    )}
+                  </div>
+                  <div className="border border-gray-200 rounded-lg p-3 mb-4">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Capital amortizado (opcional)</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">R$</span>
+                      <input
+                        type="number" min="0" step="0.01" placeholder="0,00"
+                        value={payCapital}
+                        onChange={e => setPayCapital(e.target.value)}
+                        className="flex-1 border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      />
+                    </div>
+                    {extraCapital > 0 && (
+                      <p className="text-xs text-emerald-600 mt-1.5">Saldo devedor reduzido em {extraCapital.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center mb-4 border-t pt-3">
+                    <span className="text-sm font-medium text-gray-700">Total a receber:</span>
+                    <span className="text-lg font-bold text-blue-700">
+                      {totalToPay.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setPayingInst(null); setPayCapital(""); }}
+                      className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => markAsPaidMutation.mutate({ id: payingInst.id, paidValue: fixedInterest.toFixed(2), capitalPaid: "0" })}
+                      disabled={markAsPaidMutation.isPending}
+                      className="flex-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50"
+                    >
+                      Só juros
+                    </button>
+                    {extraCapital > 0 && (
+                      <button
+                        onClick={handleConfirmPayment}
+                        disabled={markAsPaidMutation.isPending}
+                        className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50"
+                      >
+                        Confirmar
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <p className="text-xs font-medium text-blue-700 mb-0.5">Valor da parcela</p>
+                    <p className="text-2xl font-bold text-blue-800">
+                      {parseFloat(payingInst.value || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setPayingInst(null); setPayCapital(""); }}
+                      className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleConfirmPayment}
+                      disabled={markAsPaidMutation.isPending}
+                      className="flex-1 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-50"
+                    >
+                      {markAsPaidMutation.isPending ? "Salvando..." : "Confirmar pagamento"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal de edição do contrato */}
       {isEditingContract && (

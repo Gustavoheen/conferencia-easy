@@ -21,6 +21,7 @@ interface DataTableProps {
   data: any[];
   onEdit?: (row: any) => void;
   onDelete?: (row: any) => void;
+  onRowClick?: (row: any) => void;
   isLoading?: boolean;
   emptyMessage?: string;
 }
@@ -30,6 +31,7 @@ export default function DataTable({
   data,
   onEdit,
   onDelete,
+  onRowClick,
   isLoading = false,
   emptyMessage = 'Nenhum registro encontrado',
 }: DataTableProps) {
@@ -68,7 +70,8 @@ export default function DataTable({
           {data.map((row, index) => (
             <TableRow
               key={index}
-              className="border-b hover:bg-gray-50 transition-colors"
+              className={`border-b hover:bg-gray-50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+              onClick={() => onRowClick?.(row)}
             >
               {columns.map((column) => (
                 <TableCell key={column.key} className="py-3 text-gray-700">
@@ -79,7 +82,7 @@ export default function DataTable({
               ))}
               {(onEdit || onDelete) && (
                 <TableCell className="py-3">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                     {onEdit && (
                       <Button
                         size="sm"

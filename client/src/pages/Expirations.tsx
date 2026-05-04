@@ -165,6 +165,11 @@ export default function Expirations() {
   }), [monthInstallments]);
 
   const getPaymentInfo = (item: any) => {
+    // fixed_interest: juros = valor da parcela (fixo), capital = 0
+    if (item.contractType === "fixed_interest") {
+      const interest = parseFloat(item.value || "0");
+      return { interest, capital: 0, installmentValue: interest };
+    }
     const principal = parseFloat(item.contractOriginalValue || "0");
     const rate = parseFloat(item.contractInterestRate || "0");
     const interest = principal * rate / 100;
@@ -414,9 +419,15 @@ export default function Expirations() {
               ) : (
                 <>
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-                    <p className="text-xs font-medium text-amber-700 mb-0.5">Pagamento mínimo (só juros)</p>
+                    <p className="text-xs font-medium text-amber-700 mb-0.5">
+                      {payingItem.contractType === "fixed_interest" ? "Juros mensais fixos" : "Pagamento mínimo (só juros)"}
+                    </p>
                     <p className="text-xl font-bold text-amber-800">{fmtBRL(info.interest)}</p>
-                    <p className="text-xs text-amber-600 mt-0.5">Saldo devedor permanece inalterado</p>
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      {payingItem.contractType === "fixed_interest"
+                        ? "Valor fixo independente do capital pago"
+                        : "Saldo devedor permanece inalterado"}
+                    </p>
                   </div>
                   <div className="border border-gray-200 rounded-lg p-3 mb-4">
                     <p className="text-xs font-medium text-gray-700 mb-2">Capital adicional (opcional)</p>

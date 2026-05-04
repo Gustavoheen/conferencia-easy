@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export default function Customers() {
+  const [, navigate] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [offset, setOffset] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -189,6 +191,7 @@ export default function Customers() {
             data={customersData?.data || []}
             isLoading={isLoading}
             emptyMessage="Nenhum cliente encontrado"
+            onRowClick={(row) => navigate(`/customers/${row.id}`)}
             onEdit={(row) => handleOpenModal(row)}
             onDelete={(row) => handleDelete(row)}
           />

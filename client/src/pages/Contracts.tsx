@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,9 +9,10 @@ import { Plus, Search, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 
-type ContractType = "fixed" | "installment" | "revolving";
+type ContractType = "fixed" | "installment" | "revolving" | "sac" | "fixed_interest";
 
 export default function Contracts() {
+  const [, navigate] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [status, setStatus] = useState<"open" | "closed" | undefined>();
   const [offset, setOffset] = useState(0);
@@ -61,10 +63,33 @@ export default function Contracts() {
     return null;
   }, [formData.contractType, original, rate]);
 
+  const calcFixedInterest = useMemo(() => {
+    if (formData.contractType === "fixed_interest") {
+      return { fixedMonthlyInterest: original * rate / 100 };
+    }
+    return null;
+  }, [formData.contractType, original, rate]);
+
+  const calcSac = useMemo(() => {
+    if (formData.contractType === "sac" && n > 0) {
+      const amortization = original / n;
+      const installments = Array.from({ length: n }, (_, i) => {
+        const balance = original - amortization * i;
+        const interest = balance * rate / 100;
+        return { value: amortization + interest, interest, balance };
+      });
+      const total = installments.reduce((s, p) => s + p.value, 0);
+      return { amortization, firstInstallment: installments[0]?.value ?? 0, lastInstallment: installments[n - 1]?.value ?? 0, total };
+    }
+    return null;
+  }, [formData.contractType, original, rate, n]);
+
   const totalValue = useMemo(() => {
     if (formData.contractType === "revolving") return original;
+    if (formData.contractType === "fixed_interest") return original;
+    if (formData.contractType === "sac") return calcSac?.total ?? original;
     return original + (original * rate) / 100;
-  }, [formData.contractType, original, rate]);
+  }, [formData.contractType, original, rate, calcSac]);
 
   const createMutation = trpc.contracts.create.useMutation({
     onSuccess: () => {
@@ -173,10 +198,26 @@ export default function Contracts() {
     if (formData.contractType === "revolving") {
       interestValue = "0";
       computedTotal = originalVal.toFixed(2);
+    } else if (formData.contractType === "fixed_interest") {
+      interestValue = iv.toFixed(2); // valor fixo mensal (não muda com pagamentos de capital)
+      computedTotal = originalVal.toFixed(2);
     } else if (formData.contractType === "installment") {
-      // Juros sobre o total inteiro, multiplicado pelo número de parcelas
+      // Juros simples: mesmo juro em todas as parcelas sobre o valor original
       interestValue = iv.toFixed(2);
       computedTotal = (originalVal + iv * n).toFixed(2);
+    } else if (formData.contractType === "sac") {
+      // SAC: juros decrescentes sobre saldo devedor
+      const amortization = originalVal / n;
+      let totalInterest = 0;
+      let total = 0;
+      for (let i = 0; i < n; i++) {
+        const balance = originalVal - amortization * i;
+        const interest = balance * interestRateVal / 100;
+        totalInterest += interest;
+        total += amortization + interest;
+      }
+      interestValue = totalInterest.toFixed(2);
+      computedTotal = total.toFixed(2);
     } else {
       interestValue = iv.toFixed(2);
       computedTotal = (originalVal + iv).toFixed(2);
@@ -193,7 +234,7 @@ export default function Contracts() {
       startDate: formData.startDate ? new Date(formData.startDate + "T12:00:00") : new Date(),
       notes: formData.description,
       installmentCount:
-        formData.contractType === "installment"
+        formData.contractType === "installment" || formData.contractType === "sac"
           ? n
           : 1,
     };
@@ -203,6 +244,12 @@ export default function Contracts() {
         id: editingContract.id,
         status: editingContract.status,
         notes: formData.description,
+        type: formData.contractType,
+        originalValue: formData.originalValue,
+        interestRate: formData.interestRate,
+        interestValue,
+        totalValue: computedTotal,
+        startDate: formData.startDate ? new Date(formData.startDate + "T12:00:00") : undefined,
       });
     } else {
       await createMutation.mutateAsync(payload);
@@ -247,10 +294,24 @@ export default function Contracts() {
         </span>
       );
     }
+    if (type === "sac") {
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+          SAC
+        </span>
+      );
+    }
     if (type === "revolving") {
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
           Rotativo
+        </span>
+      );
+    }
+    if (type === "fixed_interest") {
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
+          Juros Fixo
         </span>
       );
     }
@@ -294,7 +355,7 @@ export default function Contracts() {
       key: "type",
       label: "Ações",
       render: (value: string, row: any) => {
-        if (value === "revolving") {
+        if (value === "revolving" || value === "fixed_interest") {
           return (
             <button
               className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
@@ -365,6 +426,7 @@ export default function Contracts() {
             data={contractsData?.data || []}
             isLoading={isLoading}
             emptyMessage="Nenhum contrato encontrado"
+            onRowClick={(row) => navigate(`/contracts/${row.id}`)}
             onEdit={(row) => handleOpenModal(row)}
             onDelete={(row) => handleDelete(row)}
           />
@@ -428,8 +490,10 @@ export default function Contracts() {
               className="form-input"
             >
               <option value="fixed">Fixo</option>
-              <option value="installment">Parcelado</option>
+              <option value="installment">Parcelado (juros simples)</option>
+              <option value="sac">Parcelado SAC (juros sobre saldo)</option>
               <option value="revolving">Juros Mensais (Rotativo)</option>
+              <option value="fixed_interest">Juros Fixo Mensal (valor fixo independente do capital)</option>
             </select>
           </div>
 
@@ -457,7 +521,7 @@ export default function Contracts() {
             />
           </div>
 
-          {formData.contractType === "installment" && (
+          {(formData.contractType === "installment" || formData.contractType === "sac") && (
             <div>
               <label className="form-label">Número de Parcelas</label>
               <Input
@@ -473,7 +537,13 @@ export default function Contracts() {
 
           {formData.contractType === "revolving" && (
             <div className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-              Serão geradas 12 parcelas de juros automaticamente
+              Gera 1 parcela por mês. A próxima é criada ao marcar como pago.
+            </div>
+          )}
+
+          {formData.contractType === "fixed_interest" && (
+            <div className="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+              Juros de <strong>R$ {(original * rate / 100).toFixed(2)}/mês fixos</strong> — não mudam conforme o capital é pago. Cada mês gera 1 parcela automaticamente ao receber o pagamento.
             </div>
           )}
 
@@ -499,7 +569,49 @@ export default function Contracts() {
 
           {/* Calculation Display */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            {formData.contractType === "installment" && calcInstallment ? (
+            {formData.contractType === "fixed_interest" && calcFixedInterest ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Capital emprestado:</span>
+                  <span className="font-semibold">R$ {original.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Taxa de juros:</span>
+                  <span className="font-semibold">{rate}% ao mês</span>
+                </div>
+                <div className="border-t border-blue-200 pt-2 flex justify-between">
+                  <span className="text-gray-900 font-semibold">Juros mensais fixos:</span>
+                  <span className="text-lg font-bold text-orange-600">R$ {calcFixedInterest.fixedMonthlyInterest.toFixed(2)}/mês</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Este valor não muda mesmo que o cliente pague parte do capital
+                </div>
+              </div>
+            ) : formData.contractType === "sac" && calcSac ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Valor Original:</span>
+                  <span className="font-semibold">R$ {original.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Amortização fixa:</span>
+                  <span className="font-semibold">R$ {calcSac.amortization.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">1ª parcela (maior):</span>
+                  <span className="font-semibold">R$ {calcSac.firstInstallment.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Última parcela (menor):</span>
+                  <span className="font-semibold">R$ {calcSac.lastInstallment.toFixed(2)}</span>
+                </div>
+                <div className="border-t border-blue-200 pt-2 flex justify-between">
+                  <span className="text-gray-900 font-semibold">Total ({n}x):</span>
+                  <span className="text-lg font-bold text-blue-600">R$ {calcSac.total.toFixed(2)}</span>
+                </div>
+                <div className="text-xs text-gray-500">Juros calculados sobre o saldo devedor remanescente</div>
+              </div>
+            ) : formData.contractType === "installment" && calcInstallment ? (
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-700">Valor Original:</span>

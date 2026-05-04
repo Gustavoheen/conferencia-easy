@@ -518,8 +518,8 @@ export async function revertInstallmentPayment(installmentId: number): Promise<{
         .where(eq(contracts.id, installment.contractId));
     }
 
-    // Rotativo: remove a parcela auto-gerada após esta
-    if (contract.type === "revolving") {
+    // Rotativo / Juros Fixo: remove a parcela auto-gerada após esta
+    if (contract.type === "revolving" || contract.type === "fixed_interest") {
       const nextInst = await tx.select({ id: installments.id })
         .from(installments)
         .where(and(
@@ -572,7 +572,10 @@ export async function processInstallmentPayment(
 
     if (capitalPaidNum > 0) {
       currentPrincipal = Math.max(0, currentPrincipal - capitalPaidNum);
-      const newMinimumPayment = (currentPrincipal * interestRate / 100).toFixed(2);
+      // fixed_interest: juros mensal não muda quando capital é abatido
+      const newMinimumPayment = contract.type === "fixed_interest"
+        ? (contract.interestValue as string)
+        : (currentPrincipal * interestRate / 100).toFixed(2);
       await tx.update(contracts).set({
         originalValue: currentPrincipal.toFixed(2),
         minimumPayment: newMinimumPayment,
@@ -630,6 +633,17 @@ export async function processInstallmentPayment(
           dueDate,
           value: monthlyInterest.toFixed(2),
         });
+      } else if (contract.type === "fixed_interest") {
+        // Juros fixo: próxima parcela sempre com o valor fixo original
+        const fixedInterest = parseFloat(contract.interestValue as string);
+        const dueDate = new Date(baseDate);
+        dueDate.setMonth(dueDate.getMonth() + 1);
+        await tx.insert(installments).values({
+          contractId: installment.contractId,
+          installmentNumber: installment.installmentNumber + 1,
+          dueDate,
+          value: fixedInterest.toFixed(2),
+        });
       } else {
         const pendingCountRow = await tx
           .select({ cnt: count() })
@@ -667,7 +681,7 @@ export async function processInstallmentPayment(
           }
         }
       }
-    } else if (contract.type === "revolving") {
+    } else if (contract.type === "revolving" || contract.type === "fixed_interest") {
       const lastNumRow = await tx
         .select({ installmentNumber: installments.installmentNumber })
         .from(installments)
@@ -675,14 +689,17 @@ export async function processInstallmentPayment(
         .orderBy(desc(installments.installmentNumber)).limit(1);
       const lastNumber = lastNumRow[0]?.installmentNumber ?? 0;
       if (currentPrincipal > 0) {
-        const monthlyInterest = currentPrincipal * interestRate / 100;
+        // revolving: recalcula sobre saldo devedor; fixed_interest: valor sempre fixo
+        const nextValue = contract.type === "fixed_interest"
+          ? parseFloat(contract.interestValue as string)
+          : currentPrincipal * interestRate / 100;
         const dueDate = new Date(installment.dueDate as Date);
         dueDate.setMonth(dueDate.getMonth() + 1);
         await tx.insert(installments).values({
           contractId: installment.contractId,
           installmentNumber: lastNumber + 1,
           dueDate,
-          value: monthlyInterest.toFixed(2),
+          value: nextValue.toFixed(2),
         });
       }
     }

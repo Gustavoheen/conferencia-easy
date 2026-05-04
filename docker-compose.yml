@@ -4,7 +4,7 @@ services:
     container_name: sysjuros-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: sysjuros123
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme}
       MYSQL_DATABASE: sysjuros
     ports:
       - "3307:3306"

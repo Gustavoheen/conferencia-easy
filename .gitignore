@@ -114,3 +114,5 @@ client/public/__manus__/version.json
 
 .vercel
 .env*.local
+.env.vercel.check
+.env.production.pulled

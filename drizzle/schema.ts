@@ -12,7 +12,7 @@ export const sysjuros = pgSchema("sysjuros");
 
 // Enums
 export const roleEnum = sysjuros.enum("role", ["user", "admin"]);
-export const contractTypeEnum = sysjuros.enum("contract_type", ["fixed", "installment", "revolving", "sac"]);
+export const contractTypeEnum = sysjuros.enum("contract_type", ["fixed", "installment", "revolving", "sac", "fixed_interest"]);
 export const contractStatusEnum = sysjuros.enum("contract_status", ["open", "closed"]);
 export const installmentStatusEnum = sysjuros.enum("installment_status", ["pending", "paid", "overdue"]);
 

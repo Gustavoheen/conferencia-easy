@@ -248,7 +248,7 @@ export const appRouter = router({
         z.object({
           customerId: z.number(),
           contractNumber: z.string().min(1),
-          type: z.enum(["fixed", "installment", "revolving", "sac"]),
+          type: z.enum(["fixed", "installment", "revolving", "sac", "fixed_interest"]),
           originalValue: z.string(),
           interestRate: z.string(),
           interestValue: z.string(),
@@ -307,8 +307,7 @@ export const appRouter = router({
             });
           }
         } else if (input.type === "revolving") {
-          // Gera apenas a primeira parcela (próximo mês)
-          // As demais são geradas automaticamente quando cada parcela é paga
+          // Gera apenas a primeira parcela; demais geradas automaticamente ao pagar
           const monthlyInterest = originalValue * interestRate / 100;
           const dueDate = new Date(startDate);
           dueDate.setMonth(dueDate.getMonth() + 1);
@@ -317,6 +316,18 @@ export const appRouter = router({
             installmentNumber: 1,
             dueDate,
             value: monthlyInterest.toFixed(2),
+          });
+        } else if (input.type === "fixed_interest") {
+          // Juros fixo mensal: gera só a 1ª parcela com o valor fixo de juros
+          // As demais são geradas automaticamente ao marcar como pago
+          const fixedInterest = parseFloat(input.interestValue);
+          const dueDate = new Date(startDate);
+          dueDate.setMonth(dueDate.getMonth() + 1);
+          await createInstallment({
+            contractId,
+            installmentNumber: 1,
+            dueDate,
+            value: fixedInterest.toFixed(2),
           });
         }
 
@@ -338,7 +349,10 @@ export const appRouter = router({
         const lastNumber = await getLastInstallmentNumber(input.contractId);
         const originalValue = parseFloat(contract.originalValue);
         const interestRate = parseFloat(contract.interestRate);
-        const monthlyInterest = originalValue * interestRate / 100;
+        // fixed_interest: usa o valor fixo armazenado; revolving: recalcula sobre saldo
+        const monthlyInterest = contract.type === "fixed_interest"
+          ? parseFloat(contract.interestValue)
+          : originalValue * interestRate / 100;
 
         const baseDate = new Date();
         for (let i = 1; i <= input.months; i++) {
@@ -361,7 +375,7 @@ export const appRouter = router({
           id: z.number(),
           status: z.enum(["open", "closed"]).optional(),
           notes: z.string().optional(),
-          type: z.enum(["fixed", "installment", "revolving", "sac"]).optional(),
+          type: z.enum(["fixed", "installment", "revolving", "sac", "fixed_interest"]).optional(),
           originalValue: z.string().optional(),
           interestRate: z.string().optional(),
           interestValue: z.string().optional(),

@@ -1,3 +1,3 @@
-export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+export { COOKIE_NAME, SESSION_DURATION_MS } from "@shared/const";
 
 export const getLoginUrl = () => "/login";
